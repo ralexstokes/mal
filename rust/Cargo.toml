@@ -1,11 +1,6 @@
 [package]
-
-name = "mal"
-version = "0.0.1"
-authors = [ "Your name <you@example.com>" ]
+name = "rusty"
+version = "0.1.0"
+authors = ["Alex Stokes <r.alex.stokes@gmail.com>"]
 
 [dependencies]
-time = "0.1"
-regex = "0.1"
-libc = "0.1"
-num = "*"
