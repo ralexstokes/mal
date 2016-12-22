@@ -5,6 +5,8 @@ authors = ["Alex Stokes <r.alex.stokes@gmail.com>"]
 
 [dependencies]
 rustyline = "1.0.0"
+regex = "0.1.80"
+lazy_static = "0.2.2"
 
 [features]
 readline = []
