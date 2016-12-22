@@ -1,10 +1,7 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-    }
-}
+extern crate rustyline;
 
-pub mod repl;
-pub mod readline;
+pub const DEFAULT_PROMPT: &'static str = "user> ";
+
 pub mod driver;
+pub mod readline;
+pub mod repl;

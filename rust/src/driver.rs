@@ -1,15 +1,29 @@
-use readline;
-use repl;
+use readline::Reader;
+use repl::rep;
 
-pub fn run(prompt: String) {
-    loop {
-        repl(prompt);
-        break;
-    }
+pub struct Driver {
+    reader: Reader,
 }
 
-fn repl(prompt: String) {
-    let input = readline::prompt(prompt);
-    let output = repl::rep(input);
-    println!("{}", output);
+impl Driver {
+    pub fn new(prompt: String) -> Driver {
+        Driver { reader: Reader::new(prompt) }
+    }
+
+    pub fn run(&mut self) {
+        self.repl();
+    }
+
+    fn repl(&mut self) {
+        loop {
+            let input = self.reader.read();
+            match input {
+                Some(line) => {
+                    let output = rep(line);
+                    println!("{}", output);
+                }
+                None => break,
+            }
+        }
+    }
 }
