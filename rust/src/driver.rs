@@ -19,8 +19,10 @@ impl Driver {
             let input = self.reader.read();
             match input {
                 Some(line) => {
-                    let output = rep(line);
-                    println!("{}", output);
+                    match rep(line) {
+                        Some(output) => println!("{}", output),
+                        None => print!(""),
+                    }
                 }
                 None => break,
             }

@@ -2,11 +2,14 @@ use reader::read_str;
 use printer::pr_str;
 use types::Ast;
 
-pub fn rep(input: String) -> String {
-    print(eval(read(input)))
+pub fn rep(input: String) -> Option<String> {
+    match read(input) {
+        Some(ast) => Some(print(eval(ast))),
+        None => None,
+    }
 }
 
-fn read(input: String) -> Ast {
+fn read(input: String) -> Option<Ast> {
     read_str(input)
 }
 

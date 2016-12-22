@@ -11,4 +11,5 @@ pub enum TokenType {
     OpenList,
     CloseList,
     Atom,
+    Comment,
 }

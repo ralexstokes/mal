@@ -1,10 +1,10 @@
 use regex::{Regex, Captures};
 use types::{Ast, TokenType};
 
-pub fn read_str(input: String) -> Ast {
+pub fn read_str(input: String) -> Option<Ast> {
     let tokens = tokenizer(input);
     let mut reader = Reader::new(tokens);
-    read_form(&mut reader).unwrap()
+    read_form(&mut reader)
 }
 
 const TOKEN_REGEX: &'static str =
@@ -41,6 +41,10 @@ fn is_whitespace(c: char) -> bool {
 }
 
 fn typ_for(c: &str) -> TokenType {
+    if c.starts_with(';') {
+        return TokenType::Comment;
+    }
+
     match c {
         "(" => TokenType::OpenList,
         ")" => TokenType::CloseList,
@@ -68,8 +72,8 @@ fn read_form(reader: &mut Reader) -> Option<Ast> {
 fn ast_from(reader: &mut Reader, token: &Token) -> Option<Ast> {
     match token.typ {
         TokenType::OpenList => read_list(reader),
-        TokenType::CloseList => None,
         TokenType::Atom => read_atom(reader),
+        _ => None,
     }
 }
 
