@@ -10,6 +10,9 @@ BINS = $(SRCS:%.rs=target/release/%)
 
 all: $(BINS)
 
+run:
+	cargo run --bin main
+
 readline:
 	cargo build --features "readline"
 
@@ -26,4 +29,4 @@ clean:
 	cargo clean
 	rm mal
 
-.PHONY: mal
+.PHONY: mal run
