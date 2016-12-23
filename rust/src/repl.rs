@@ -43,6 +43,18 @@ fn add(a: i64, b: i64) -> i64 {
     a + b
 }
 
+fn sub(a: i64, b: i64) -> i64 {
+    a - b
+}
+
+fn mul(a: i64, b: i64) -> i64 {
+    a * b
+}
+
+fn div(a: i64, b: i64) -> i64 {
+    a / b
+}
+
 fn apply(op: &PrimOpType, args: Vec<Ast>) -> Option<Ast> {
     // let f: Box<FnMut(i64, i64) -> i64> = match op {
     //     &PrimOpType::Add => Box::new(|a: i64, b: i64| a + b),
@@ -50,13 +62,24 @@ fn apply(op: &PrimOpType, args: Vec<Ast>) -> Option<Ast> {
     //     &PrimOpType::Multiply => Box::new(|a: i64, b: i64| a * b),
     //     &PrimOpType::Divide => Box::new(|a: i64, b: i64| a / b),
     // };
-    let f = add;
+    let f = match op {
+        &PrimOpType::Add => add,
+        &PrimOpType::Subtract => sub,
+        &PrimOpType::Multiply => mul,
+        &PrimOpType::Divide => div,
+    };
+    let zero = match op {
+        &PrimOpType::Add => 0,
+        &PrimOpType::Subtract => 0,
+        &PrimOpType::Multiply => 1,
+        &PrimOpType::Divide => 1,
+    };
     let result = args.iter()
         .map(|arg| match arg {
             &Ast::Number(n) => n,
             _ => 0,
         })
-        .fold(0, f);
+        .fold(zero, f);
     Some(Ast::Number(result))
 }
 
