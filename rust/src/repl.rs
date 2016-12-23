@@ -35,7 +35,7 @@ fn eval(ast: Ast, env: &Env) -> Option<Ast> {
                 None
             }
         }
-        Ast::PrimOp(op) => unreachable!(),
+        Ast::PrimOp(_) => unreachable!(),
     }
 }
 
