@@ -1,8 +1,10 @@
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum Ast {
     Symbol(String),
     Number(i64),
     List(Vec<Ast>),
+    // Combination(PrimOpType, Box<Args>),
+    PrimOp(PrimOpType),
 }
 
 
@@ -12,4 +14,12 @@ pub enum TokenType {
     CloseList,
     Atom,
     Comment,
+}
+
+#[derive(Debug,Clone)]
+pub enum PrimOpType {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
 }

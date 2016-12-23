@@ -1,4 +1,4 @@
-use types::Ast;
+use types::{Ast, PrimOpType};
 
 pub fn pr_str(ast: Ast) -> Option<String> {
     match ast {
@@ -11,6 +11,15 @@ pub fn pr_str(ast: Ast) -> Option<String> {
                 .collect::<Vec<_>>()
                 .join(" ");
             Some("(".to_string() + &results + ")")
+        }
+        Ast::PrimOp(op) => {
+            let s = match op {
+                PrimOpType::Add => "+",
+                PrimOpType::Subtract => "-",
+                PrimOpType::Multiply => "*",
+                PrimOpType::Divide => "/",
+            };
+            Some(s.to_string())
         }
     }
 }
