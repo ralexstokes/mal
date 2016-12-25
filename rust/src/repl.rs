@@ -56,31 +56,27 @@ fn div(a: i64, b: i64) -> i64 {
 }
 
 fn apply(op: &PrimOpType, args: Vec<Ast>) -> Option<Ast> {
-    // let f: Box<FnMut(i64, i64) -> i64> = match op {
-    //     &PrimOpType::Add => Box::new(|a: i64, b: i64| a + b),
-    //     &PrimOpType::Subtract => Box::new(|a: i64, b: i64| a - b),
-    //     &PrimOpType::Multiply => Box::new(|a: i64, b: i64| a * b),
-    //     &PrimOpType::Divide => Box::new(|a: i64, b: i64| a / b),
-    // };
     let f = match op {
         &PrimOpType::Add => add,
         &PrimOpType::Subtract => sub,
         &PrimOpType::Multiply => mul,
         &PrimOpType::Divide => div,
     };
-    let zero = match op {
-        &PrimOpType::Add => 0,
-        &PrimOpType::Subtract => 0,
-        &PrimOpType::Multiply => 1,
-        &PrimOpType::Divide => 1,
-    };
-    let result = args.iter()
+    let nums = args.iter()
         .map(|arg| match arg {
             &Ast::Number(n) => n,
             _ => 0,
         })
-        .fold(zero, f);
-    Some(Ast::Number(result))
+        .collect::<Vec<_>>();
+    if let Some((first, rest)) = nums.split_first() {
+        let mut result = *first;
+        for &n in rest {
+            result = f(result, n);
+        }
+        Some(Ast::Number(result))
+    } else {
+        None
+    }
 }
 
 fn print(ast: Ast) -> String {
