@@ -5,7 +5,7 @@ use env::{Env, add, sub, mul, div};
 
 pub fn rep(input: String, env: &Env) -> Option<String> {
     read(input)
-        .and_then(|ast| eval(ast, env))
+        .and_then(|ast| eval(&ast, env))
         .map(print)
 }
 
@@ -13,11 +13,15 @@ fn read(input: String) -> Option<Ast> {
     read_str(input)
 }
 
-fn eval(ast: Ast, env: &Env) -> Option<Ast> {
+fn eval(ast: &Ast, env: &Env) -> Option<Ast> {
     match ast {
-        Ast::Number(n) => Some(Ast::Number(n)),
-        Ast::Symbol(s) => env.lookup(s).map(Ast::PrimOp),
-        Ast::List(ls) => {
+        &Ast::Number(_) => Some(ast.clone()),
+        &Ast::Symbol(ref s) => env.lookup(&s).map(Ast::PrimOp),
+        &Ast::List(ref ls) => {
+            match ls.len() {
+                0 => return Some(ast.clone()),
+                _ => {}
+            }
             let els = ls.into_iter()
                 .map(|l| eval(l, env))
                 .filter(|l| l.is_some())
@@ -35,7 +39,7 @@ fn eval(ast: Ast, env: &Env) -> Option<Ast> {
                 None
             }
         }
-        Ast::PrimOp(_) => unreachable!(),
+        &Ast::PrimOp(_) => unreachable!(),
     }
 }
 
