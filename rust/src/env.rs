@@ -2,10 +2,8 @@ use std::collections::HashMap;
 use std::default::Default;
 use types::PrimOpType;
 
-// type FnMap = HashMap<String, Fn(i64, i64) -> i64>;
-
 pub struct Env {
-    bindings: HashMap<String, PrimOpType>, // Box<Fn(i64, i64) -> i64 + 'a>>
+    bindings: HashMap<String, PrimOpType>,
 }
 
 impl Env {
