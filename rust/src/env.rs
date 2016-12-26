@@ -11,8 +11,8 @@ impl Env {
         Env::default()
     }
 
-    pub fn lookup(&self, s: String) -> Option<PrimOpType> {
-        match self.bindings.get(&s) {
+    pub fn lookup(&self, s: &String) -> Option<PrimOpType> {
+        match self.bindings.get(s) {
             Some(op) => {
                 let op = op.clone();
                 Some(op)
