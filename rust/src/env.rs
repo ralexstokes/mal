@@ -34,18 +34,18 @@ impl Default for Env {
     }
 }
 
-fn add(a: i64, b: i64) -> i64 {
+pub fn add(a: i64, b: i64) -> i64 {
     a + b
 }
 
-fn sub(a: i64, b: i64) -> i64 {
+pub fn sub(a: i64, b: i64) -> i64 {
     a - b
 }
 
-fn mul(a: i64, b: i64) -> i64 {
+pub fn mul(a: i64, b: i64) -> i64 {
     a * b
 }
 
-fn div(a: i64, b: i64) -> i64 {
+pub fn div(a: i64, b: i64) -> i64 {
     a / b
 }

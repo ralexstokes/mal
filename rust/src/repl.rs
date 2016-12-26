@@ -1,7 +1,7 @@
 use reader::read_str;
 use printer::pr_str;
 use types::{Ast, PrimOpType};
-use env::Env;
+use env::{Env, add, sub, mul, div};
 
 pub fn rep(input: String, env: &Env) -> Option<String> {
     read(input)
@@ -37,22 +37,6 @@ fn eval(ast: Ast, env: &Env) -> Option<Ast> {
         }
         Ast::PrimOp(_) => unreachable!(),
     }
-}
-
-fn add(a: i64, b: i64) -> i64 {
-    a + b
-}
-
-fn sub(a: i64, b: i64) -> i64 {
-    a - b
-}
-
-fn mul(a: i64, b: i64) -> i64 {
-    a * b
-}
-
-fn div(a: i64, b: i64) -> i64 {
-    a / b
 }
 
 fn apply(op: &PrimOpType, args: Vec<Ast>) -> Option<Ast> {
