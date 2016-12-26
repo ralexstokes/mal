@@ -21,7 +21,8 @@ fn tokenizer(input: String) -> Vec<Token> {
 
 #[test]
 fn test_tokenizer() {
-    let tokens = tokenizer("(1 2, 3, 4,,,,)".to_string());
+    let inputstr = "(+ 1 (* 1 1 1) (- 3 2 1))";
+    let tokens = tokenizer(inputstr.to_string());
     for t in tokens.iter() {
         println!("{:?}", t)
     }
@@ -52,83 +53,6 @@ fn typ_for(c: &str) -> TokenType {
     }
 }
 
-#[test]
-fn test_read_form() {
-    let inputstr = "(+ 1 2 (3 4))";
-    let tokens = tokenizer(inputstr.to_string());
-    let mut reader = Reader::new(tokens);
-    let ast = read_form(&mut reader).unwrap();
-    print!("{} => ", inputstr);
-    println!("{:?}", ast);
-}
-
-fn read_form(reader: &mut Reader) -> Option<Ast> {
-    match reader.peek() {
-        Some(token) => ast_from(reader, &token),
-        None => None,
-    }
-}
-
-fn ast_from(reader: &mut Reader, token: &Token) -> Option<Ast> {
-    match token.typ {
-        TokenType::OpenList => read_list(reader),
-        TokenType::Atom => read_atom(reader),
-        _ => None,
-    }
-}
-
-fn read_list(reader: &mut Reader) -> Option<Ast> {
-    let mut list: Vec<Ast> = vec![];
-    let mut did_close_list = false;
-
-    while let Some(token) = reader.next() {
-        match token.typ {
-            TokenType::CloseList => {
-                did_close_list = true;
-                break;
-            }
-            _ => {
-                if let Some(ast) = read_form(reader) {
-                    list.push(ast)
-                }
-            }
-        }
-    }
-
-    if !did_close_list {
-        return None;
-    }
-
-    Some(Ast::List(list))
-}
-
-fn read_atom(reader: &mut Reader) -> Option<Ast> {
-    if let Some(token) = reader.peek() {
-        match token.typ {
-            TokenType::Atom => {
-                if let Some(node) = number_from(&token) {
-                    return Some(node);
-                }
-                symbol_from(&token)
-            }
-            _ => None,
-        }
-    } else {
-        None
-    }
-}
-
-fn symbol_from(token: &Token) -> Option<Ast> {
-    Some(Ast::Symbol(token.value.clone()))
-}
-
-fn number_from(token: &Token) -> Option<Ast> {
-    match token.value.parse::<i64>() {
-        Ok(n) => Some(Ast::Number(n)),
-        Err(_) => None,
-    }
-}
-
 #[derive(Debug,Clone)]
 pub struct Token {
     typ: TokenType,
@@ -142,32 +66,46 @@ pub struct Reader {
     position: usize,
 }
 
-impl Reader {
-    fn new(tokens: Vec<Token>) -> Reader {
-        let mut current: Option<Token> = None;
+impl Iterator for Reader {
+    type Item = Token;
 
-        if let Some(t) = tokens.first() {
-            current = Some(t.clone());
-        }
-
-        Reader {
-            tokens: tokens,
-            current_token: current,
-            position: 0,
-        }
-    }
-
-    // next returns the token at the current position and increments the position.
-    // returns None if we are past the end of the token stream.
     fn next(&mut self) -> Option<Token> {
-        let token = self.current_token.clone();
+        let current_token = match self.current_token {
+            Some(_) => self.current_token.clone(),
+            None => return None,
+        };
+
         self.position += 1;
         if self.position < self.tokens.len() {
-            self.current_token = Some(self.tokens[self.position].clone());
+            self.current_token = Some(self.tokens[self.position].clone())
         } else {
             self.current_token = None
         }
-        token
+        current_token
+    }
+}
+
+impl Reader {
+    fn new(tokens: Vec<Token>) -> Reader {
+        let current = tokens.first()
+            .map(|t| t.clone());
+
+        match current {
+            Some(_) => {
+                Reader {
+                    tokens: tokens,
+                    current_token: current,
+                    position: 0,
+                }
+            }
+            None => {
+                Reader {
+                    tokens: tokens,
+                    current_token: None,
+                    position: 0,
+                }
+            }
+        }
     }
 
     fn peek(&self) -> Option<Token> {
@@ -175,12 +113,91 @@ impl Reader {
     }
 }
 
-
 #[test]
 fn test_reader() {
-    let tokens = tokenizer("(+ 2 3)".to_string());
-    let mut reader = Reader::new(tokens);
-    while let Some(token) = reader.next() {
+    let inputstr = "(+ 1 (* 1 1 1) (- 3 2 1))";
+    let tokens = tokenizer(inputstr.to_string());
+    let reader = Reader::new(tokens);
+    println!("{}", inputstr);
+    for token in reader {
         println!("{:?}", token);
+    }
+}
+
+#[test]
+fn test_read_form() {
+    let inputstr = "(+ 1 2 (* 1 1 1) (- 3 2 1))";
+    let tokens = tokenizer(inputstr.to_string());
+    let mut reader = Reader::new(tokens);
+    let ast = read_form(&mut reader).unwrap();
+    print!("{} => ", inputstr);
+    println!("{}", ast);
+}
+
+fn read_form(reader: &mut Reader) -> Option<Ast> {
+    let mut result: Option<Ast> = None;
+
+    while let Some(token) = reader.peek() {
+        match token.typ {
+            TokenType::Atom => {
+                result = read_atom(reader);
+                break;
+            }
+            TokenType::OpenList => {
+                result = read_list(reader);
+                break;
+            }
+            TokenType::CloseList => {}
+            TokenType::Comment => unreachable!(),
+        }
+    }
+    result
+}
+
+fn read_list(reader: &mut Reader) -> Option<Ast> {
+    let _ = reader.next();
+    let mut in_list = true;
+
+    let mut list: Vec<Ast> = vec![];
+
+    while let Some(token) = reader.peek() {
+        match token.typ {
+            TokenType::CloseList => {
+                let _ = reader.next();
+                in_list = false;
+                break;
+            }
+            _ => {
+                if let Some(ast) = read_form(reader) {
+                    list.push(ast);
+                }
+            }
+        }
+    }
+
+    if in_list {
+        return None;
+    }
+
+    Some(Ast::List(list))
+}
+
+fn read_atom(reader: &mut Reader) -> Option<Ast> {
+    reader.next().and_then(|token| {
+        match token.typ {
+            TokenType::Atom => number_from(&token).or(symbol_from(&token)),
+            _ => None,
+        }
+    })
+}
+
+fn symbol_from(token: &Token) -> Option<Ast> {
+    Some(Ast::Symbol(token.value.clone()))
+}
+
+fn number_from(token: &Token) -> Option<Ast> {
+    match token.value.parse::<i64>() {
+        Ok(n) => Some(Ast::Number(n)),
+        Err(_) => None,
     }
 }
