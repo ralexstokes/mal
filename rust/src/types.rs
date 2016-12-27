@@ -24,8 +24,7 @@ pub enum Ast {
     Symbol(String),
     Number(i64),
     List(Vec<Ast>),
-    // Combination(PrimOpType, Box<Args>),
-    PrimOp(PrimOpType),
+    Operator(Primitive),
 }
 
 impl fmt::Display for Ast {
@@ -34,7 +33,7 @@ impl fmt::Display for Ast {
             Ast::Symbol(ref s) => write!(f, "Symbol({})", s),
             Ast::Number(ref n) => write!(f, "Number({})", n),
             Ast::List(ref ls) => pretty_print_list(f, ls, 0),
-            Ast::PrimOp(_) => unreachable!(),
+            Ast::Operator(_) => unreachable!(),
         }
     }
 }

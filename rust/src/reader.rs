@@ -1,7 +1,7 @@
 use regex::{Regex, Captures};
 use types::{Ast, TokenType};
 
-pub fn read_str(input: String) -> Option<Ast> {
+pub fn read(input: String) -> Option<Ast> {
     let tokens = tokenizer(input);
     let mut reader = Reader::new(tokens);
     read_form(&mut reader)
