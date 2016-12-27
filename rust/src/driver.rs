@@ -23,7 +23,7 @@ impl Driver {
                 Some(line) => {
                     match rep(line, &env) {
                         Some(output) => println!("{}", output),
-                        None => print!(""),
+                        None => println!("some error"),
                     }
                 }
                 None => break,
