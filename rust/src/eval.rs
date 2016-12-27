@@ -82,8 +82,8 @@ fn apply_define(env: &mut Env, args: Vec<Ast>) -> Option<Ast> {
             }
         })
         .and_then(|(key, val)| {
-            env.set(key, val);
-            Some(Ast::Symbol("ok".to_string()))
+            env.set(key, val.clone());
+            Some(val)
         })
 }
 
