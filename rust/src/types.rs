@@ -1,6 +1,25 @@
 use std::fmt;
 
 #[derive(Debug,Clone)]
+pub enum TokenType {
+    OpenList,
+    CloseList,
+    Atom,
+    Comment,
+}
+
+#[derive(Debug,Clone)]
+pub enum Primitive {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+
+    Define,
+    Let,
+}
+
+#[derive(Debug,Clone)]
 pub enum Ast {
     Symbol(String),
     Number(i64),
@@ -92,21 +111,4 @@ fn pretty_print_list(f: &mut fmt::Formatter, ls: &Vec<Ast>, depth: i32) -> fmt::
     }
     let result = if depth != 0 { write!(f, ",") } else { Ok(()) };
     result
-}
-
-
-#[derive(Debug,Clone)]
-pub enum TokenType {
-    OpenList,
-    CloseList,
-    Atom,
-    Comment,
-}
-
-#[derive(Debug,Clone)]
-pub enum PrimOpType {
-    Add,
-    Subtract,
-    Multiply,
-    Divide,
 }
