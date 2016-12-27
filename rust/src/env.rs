@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use types::{Ast, Primitive};
 
-pub struct Env {
+pub struct Env<'a> {
     bindings: HashMap<String, Ast>,
-    outer: Option<Box<Env>>,
+    outer: Option<Box<&'a Env<'a>>>,
 }
 
-impl Env {
-    pub fn new(outer: Option<Box<Env>>) -> Env {
+impl<'a> Env<'a> {
+    pub fn new<'b>(outer: Option<Box<&'b Env>>) -> Env<'b> {
         Env {
             bindings: HashMap::new(),
             outer: outer,
