@@ -103,5 +103,6 @@ fn apply_fn<F>(f: F, args: Vec<Ast>) -> Option<Ast>
                 .map(|a| a.clone())
                 .fold(first.clone(), f);
             Some(result)
-        }).or(None)
+        })
+        .or(None)
 }
