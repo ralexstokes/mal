@@ -6,6 +6,7 @@ pub enum TokenType {
     CloseList,
     Atom,
     Comment,
+    String,
 }
 
 #[derive(Debug,Clone)]
@@ -21,7 +22,11 @@ pub enum Primitive {
 
 #[derive(Debug,Clone)]
 pub enum Ast {
+    Nil,
+    True,
+    False,
     Symbol(String),
+    String(String),
     Number(i64),
     List(Vec<Ast>),
     Operator(Primitive),
@@ -30,7 +35,11 @@ pub enum Ast {
 impl fmt::Display for Ast {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
+            Ast::Nil => write!(f, "Nil"),
+            Ast::True => write!(f, "True"),
+            Ast::False => write!(f, "False"),
             Ast::Symbol(ref s) => write!(f, "Symbol({})", s),
+            Ast::String(ref s) => write!(f, "String({})", s),
             Ast::Number(ref n) => write!(f, "Number({})", n),
             Ast::List(ref ls) => pretty_print_list(f, ls, 0),
             Ast::Operator(_) => unreachable!(),

@@ -46,6 +46,10 @@ fn typ_for(c: &str) -> TokenType {
         return TokenType::Comment;
     }
 
+    if c.starts_with('"') {
+        return TokenType::String;
+    }
+
     match c {
         "(" => TokenType::OpenList,
         ")" => TokenType::CloseList,
@@ -149,6 +153,10 @@ fn read_form(reader: &mut Reader) -> Option<Ast> {
             }
             TokenType::CloseList => {}
             TokenType::Comment => unreachable!(),
+            TokenType::String => {
+                result = read_string(reader);
+                break;
+            }
         }
     }
     result
@@ -182,17 +190,18 @@ fn read_list(reader: &mut Reader) -> Option<Ast> {
     Some(Ast::List(list))
 }
 
-fn read_atom(reader: &mut Reader) -> Option<Ast> {
-    reader.next().and_then(|token| {
-        match token.typ {
-            TokenType::Atom => number_from(&token).or(symbol_from(&token)),
-            _ => None,
-        }
-    })
+fn read_string(reader: &mut Reader) -> Option<Ast> {
+    reader.next().and_then(|token| Some(Ast::String(token.value.clone())))
 }
 
-fn symbol_from(token: &Token) -> Option<Ast> {
-    Some(Ast::Symbol(token.value.clone()))
+fn read_atom(reader: &mut Reader) -> Option<Ast> {
+    reader.next().and_then(|token| {
+        number_from(&token)
+            .or(nil_from(&token))
+            .or(true_from(&token))
+            .or(false_from(&token))
+            .or(symbol_from(&token))
+    })
 }
 
 fn number_from(token: &Token) -> Option<Ast> {
@@ -200,4 +209,29 @@ fn number_from(token: &Token) -> Option<Ast> {
         Ok(n) => Some(Ast::Number(n)),
         Err(_) => None,
     }
+}
+
+fn nil_from(token: &Token) -> Option<Ast> {
+    match token.value.as_str() {
+        "nil" => Some(Ast::Nil),
+        _ => None,
+    }
+}
+
+fn true_from(token: &Token) -> Option<Ast> {
+    match token.value.as_str() {
+        "true" => Some(Ast::True),
+        _ => None,
+    }
+}
+
+fn false_from(token: &Token) -> Option<Ast> {
+    match token.value.as_str() {
+        "false" => Some(Ast::False),
+        _ => None,
+    }
+}
+
+fn symbol_from(token: &Token) -> Option<Ast> {
+    Some(Ast::Symbol(token.value.clone()))
 }

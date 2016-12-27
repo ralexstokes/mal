@@ -3,8 +3,12 @@ use env::{Env, add, sub, mul, div};
 
 pub fn eval(ast: &Ast, env: &mut Env) -> Option<Ast> {
     match ast {
+        &Ast::Nil => Some(ast.clone()),
+        &Ast::True => Some(ast.clone()),
+        &Ast::False => Some(ast.clone()),
         &Ast::Number(_) => Some(ast.clone()),
         &Ast::Symbol(ref s) => env.get(s),
+        &Ast::String(_) => Some(ast.clone()),
         &Ast::List(ref ls) => eval_application(ls.to_vec(), env),
         &Ast::Operator(_) => unreachable!(),
     }

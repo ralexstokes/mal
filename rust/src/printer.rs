@@ -2,7 +2,11 @@ use types::Ast;
 
 pub fn print(ast: Ast) -> Option<String> {
     match ast {
+        Ast::Nil => Some("nil".to_string()),
+        Ast::True => Some("true".to_string()),
+        Ast::False => Some("false".to_string()),
         Ast::Symbol(s) => Some(s),
+        Ast::String(s) => Some(s),
         Ast::Number(n) => Some(n.to_string()),
         Ast::List(l) => {
             let results = l.into_iter()
