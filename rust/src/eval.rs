@@ -111,37 +111,6 @@ fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
                 }
             })
         })
-        // .and_then(|(op, ops)| {
-        //     let ops = ops.to_vec();
-        //     match op {
-        //         Primitive::Define => apply_define(env, ops),
-        //         Primitive::Let => apply_let(env, ops),
-        //         Primitive::Add => {
-        //             let ops = ops.into_iter()
-        //                 .map(|op| eval(&op, env).unwrap())
-        //                 .collect::<Vec<_>>();
-        //             apply_fn(add, ops)
-        //         }
-        //         Primitive::Subtract => {
-        //             let ops = ops.into_iter()
-        //                 .map(|op| eval(&op, env).unwrap())
-        //                 .collect::<Vec<_>>();
-        //             apply_fn(sub, ops)
-        //         }
-        //         Primitive::Multiply => {
-        //             let ops = ops.into_iter()
-        //                 .map(|op| eval(&op, env).unwrap())
-        //                 .collect::<Vec<_>>();
-        //             apply_fn(mul, ops)
-        //         }
-        //         Primitive::Divide => {
-        //             let ops = ops.into_iter()
-        //                 .map(|op| eval(&op, env).unwrap())
-        //                 .collect::<Vec<_>>();
-        //             apply_fn(div, ops)
-        //         }
-        //     }
-        // })
 }
 
 fn eval_define(n: String, val: Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
@@ -149,29 +118,6 @@ fn eval_define(n: String, val: Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
         env.borrow_mut().set(n, val.clone());
         Some(val)
     })
-    // args.split_first()
-    //     .and_then(|(key, unevals)| {
-    //         match unevals.first() {
-    //             Some(val) => Some((key, eval(val, env))),
-    //             None => None,
-    //         }
-    //     })
-    //     .and_then(|(key, val)| {
-    //         match val {
-    //             Some(v) => Some((key, v)),
-    //             None => None,
-    //         }
-    //     })
-    //     .and_then(|(key, val)| {
-    //         match key {
-    //             &Ast::Symbol(ref s) => Some((s.clone(), val)),
-    //             _ => None,
-    //         }
-    //     })
-    //     .and_then(|(key, val)| {
-    //         env.set(key, val.clone());
-    //         Some(val)
-    //     })
 }
 
 fn eval_let(bindings: Vec<Ast>, body: Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
@@ -197,17 +143,4 @@ fn build_let_env(bindings: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Rc<RefCell
         }
     }
     Some(env)
-}
-
-fn apply_fn<F>(f: F, args: Vec<Ast>) -> Option<Ast>
-    where F: FnMut(Ast, Ast) -> Ast
-{
-    args.split_first()
-        .and_then(|(first, rest)| {
-            let result = rest.into_iter()
-                .map(|a| a.clone())
-                .fold(first.clone(), f);
-            Some(result)
-        })
-        .or(None)
 }
