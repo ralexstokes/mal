@@ -29,6 +29,7 @@ pub enum Ast {
         body: Vec<Ast>,
         env: Rc<RefCell<Env>>,
     },
+    Fn(fn(Vec<Ast>) -> Ast),
     Define { name: String, val: Box<Ast> },
     Let { bindings: Vec<Ast>, body: Box<Ast> },
     Combination(Vec<Ast>),
@@ -56,6 +57,7 @@ impl fmt::Display for Ast {
             }
             Ast::Do(ref seq) => pretty_print_do(f, seq, 0),
             Ast::Lambda { .. } => write!(f, "#<fn>"),
+            Ast::Fn(_) => write!(f, "#<primitive-fn>"),
             Ast::Define { name: ref n, val: ref v } => write!(f, "Define({},{})", n, *v),
             Ast::Let { bindings: ref bs, body: ref body } => write!(f, "Let({:?},{:?})", bs, body),
             Ast::Combination(ref seq) => pretty_print_list(f, seq, 0),

@@ -64,26 +64,10 @@ impl Env {
             })
     }
 
-impl<'a> Default for Env<'a> {
-    fn default() -> Env<'a> {
-        let binds = vec![
-            "+",
-            // "-",
-            // "*",
-            // "/",
-        ];
-        let exprs: Vec<Ast> = vec![
-            // Primitive::Add,
-            // Primitive::Subtract,
-            // Primitive::Multiply,
-            // Primitive::Divide,
-            // Primitive::Define,
-            // Primitive::Let,
-        ];
-        // .iter()
-        // .map(|e| Ast::Operator(e.clone())).collect();
-
-        Env::new(None, binds, exprs)
+    pub fn core() -> Rc<RefCell<Env>> {
+        let binds = vec!["+", "-", "*", "/"];
+        let exprs: Vec<Ast> = vec![Ast::Fn(add), Ast::Fn(sub), Ast::Fn(mul), Ast::Fn(div)];
+        Self::new(None, binds, exprs)
     }
 }
 
@@ -108,22 +92,43 @@ fn i64_from_ast(a: Ast, b: Ast) -> (i64, i64) {
     (aa, bb)
 }
 
-pub fn add(a: Ast, b: Ast) -> Ast {
-    let (a, b) = i64_from_ast(a, b);
-    Ast::Number(a + b)
+fn fold_first<F>(xs: Vec<Ast>, f: F) -> Ast
+    where F: Fn(Ast, Ast) -> Ast
+{
+    xs.split_first()
+        .and_then(|(first, rest)| {
+            let result = rest.iter()
+                .map(|a| a.clone())
+                .fold(first.clone(), f);
+            Some(result)
+        })
+        .unwrap_or(Ast::Nil)
 }
 
-pub fn sub(a: Ast, b: Ast) -> Ast {
-    let (a, b) = i64_from_ast(a, b);
-    Ast::Number(a - b)
+pub fn add(xs: Vec<Ast>) -> Ast {
+    fold_first(xs, |a, b| {
+        let (a, b) = i64_from_ast(a, b);
+        Ast::Number(a + b)
+    })
 }
 
-pub fn mul(a: Ast, b: Ast) -> Ast {
-    let (a, b) = i64_from_ast(a, b);
-    Ast::Number(a * b)
+pub fn sub(xs: Vec<Ast>) -> Ast {
+    fold_first(xs, |a, b| {
+        let (a, b) = i64_from_ast(a, b);
+        Ast::Number(a - b)
+    })
 }
 
-pub fn div(a: Ast, b: Ast) -> Ast {
-    let (a, b) = i64_from_ast(a, b);
-    Ast::Number(a / b)
+pub fn mul(xs: Vec<Ast>) -> Ast {
+    fold_first(xs, |a, b| {
+        let (a, b) = i64_from_ast(a, b);
+        Ast::Number(a * b)
+    })
+}
+
+pub fn div(xs: Vec<Ast>) -> Ast {
+    fold_first(xs, |a, b| {
+        let (a, b) = i64_from_ast(a, b);
+        Ast::Number(a / b)
+    })
 }

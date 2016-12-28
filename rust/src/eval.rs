@@ -18,6 +18,7 @@ pub fn eval(ast: &Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
         }
         &Ast::Do(ref seq) => eval_do(seq.to_vec(), env),
         &Ast::Lambda{..} => Some(ast.clone()),
+        &Ast::Fn(_) => Some(ast.clone()),
         &Ast::Define {
             name: ref n,
             val: ref v,
@@ -98,11 +99,14 @@ fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
                     Ast::Lambda {
                         bindings: ref bs,
                         body: ref exprs,
-                    } => return eval_lambda(bs.to_vec(), exprs.to_vec(), ops.to_vec(), env),
-                    // Ast::Operator(op) => {
-                    //     // grab primitive
-                    //     Some((op, ops))
-                    // }
+                        env: ref env,
+                    } => return eval_lambda(bs.to_vec(), exprs.to_vec(), ops.to_vec(), env.clone()),
+                    Ast::Fn(f) => {
+                        let ops = ops.iter()
+                            .map(|ast| eval(ast, env.clone()).unwrap())
+                            .collect::<Vec<_>>();
+                        Some(f(ops.to_vec()))
+                    }
                     _ => unreachable!(),
                 }
             })
