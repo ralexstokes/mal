@@ -18,17 +18,22 @@ impl Repl {
     }
 
     fn repl(&mut self) {
-        let mut env = Env::default();
+        let env = Env::core();
 
         loop {
             let line = self.reader.read();
             match line {
                 Some(line) => {
-                    let result = read(line)
-                        .and_then(|ref ast| eval(ast, &mut env))
-                        .and_then(print)
-                        .unwrap_or("some error".to_string());
-                    println!("{}", result);
+                    let result = read(line);
+                    match result {
+                        Some(ref ast) => {
+                            let result = eval(ast, env.clone())
+                                .and_then(print)
+                                .unwrap_or("some error".to_string());
+                            println!("{}", result);
+                        }
+                        None => continue,
+                    };
                 }
                 None => break,
             }

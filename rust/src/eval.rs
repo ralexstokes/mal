@@ -1,13 +1,15 @@
-use types::{Ast};
-use env::{Env, add, sub, mul, div};
+use types::Ast;
+use std::rc::Rc;
+use std::cell::RefCell;
+use env::Env;
 
-pub fn eval(ast: &Ast, env: &mut Env) -> Option<Ast> {
+pub fn eval(ast: &Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
     match ast {
         &Ast::Nil => Some(ast.clone()),
         &Ast::Boolean(_) => Some(ast.clone()),
         &Ast::String(_) => Some(ast.clone()),
         &Ast::Number(_) => Some(ast.clone()),
-        &Ast::Symbol(ref s) => env.get(s),
+        &Ast::Symbol(ref s) => env.borrow().get(s),
         &Ast::If { predicate: ref p, consequent: ref c, alternative: ref a } => {
             match *a {
                 Some(ref alt) => eval_if(*p.clone(), *c.clone(), Some(*alt.clone()), env),
@@ -29,9 +31,9 @@ pub fn eval(ast: &Ast, env: &mut Env) -> Option<Ast> {
     }
 }
 
-fn eval_do(seq: Vec<Ast>, env: &mut Env) -> Option<Ast> {
+fn eval_do(seq: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
     seq.iter()
-        .map(|s| eval(&s, env))
+        .map(|s| eval(&s, env.clone()))
         .last()
         .unwrap_or(None)
 }
@@ -39,14 +41,14 @@ fn eval_do(seq: Vec<Ast>, env: &mut Env) -> Option<Ast> {
 fn eval_if(predicate: Ast,
            consequent: Ast,
            alternative: Option<Ast>,
-           env: &mut Env)
+           env: Rc<RefCell<Env>>)
            -> Option<Ast> {
-    eval(&predicate, env).and_then(|p| {
+    eval(&predicate, env.clone()).and_then(|p| {
         match p {
             Ast::Nil |
             Ast::Boolean(false) => {
                 if let Some(ref a) = alternative {
-                    eval(a, env)
+                    eval(a, env.clone())
                 } else {
                     Some(Ast::Nil)
                 }
@@ -56,7 +58,21 @@ fn eval_if(predicate: Ast,
     })
 }
 
-fn eval_lambda(bindings: Vec<Ast>, exprs: Vec<Ast>, args: Vec<Ast>, env: &mut Env) -> Option<Ast> {
+fn eval_lambda(bindings: Vec<Ast>, exprs: Vec<Ast>, args: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
+    None
+    // let binds = bindings.iter()
+    //     .map(|b| {
+    //         match b {
+    //             &Ast::Symbol(ref s) => s.as_str(),
+    //             _ => unreachable!(),
+    //         }
+    //     })
+    //     .collect::<Vec<_>>();
+    // let body = |args| {
+    //     let env = Env::new(Some(env), binds, exprs);
+    //     eval(&args, env);
+    // };
+    // body(Ast::Nil)
     /*
     fn*: Return a new function closure. The body of that closure does the following:
     Create a new environment using env (closed over from outer scope) as the outer parameter, the first parameter (second list element of ast from the outer scope) as the binds parameter, and the parameters to the closure as the exprs parameter.
@@ -65,11 +81,11 @@ fn eval_lambda(bindings: Vec<Ast>, exprs: Vec<Ast>, args: Vec<Ast>, env: &mut En
 
     // ( (fn* (a b) (+ b a)) 3 4)
     */
-    let mut new_env = env;
-    eval(&Ast::Nil, &mut new_env)
+    // let mut new_env = env;
+    // eval(&Ast::Nil, new_env)
 }
 
-fn eval_combination(app: Vec<Ast>, env: &mut Env) -> Option<Ast> {
+fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
     let pair = app.split_first();
 
     if pair.is_none() {
@@ -77,7 +93,7 @@ fn eval_combination(app: Vec<Ast>, env: &mut Env) -> Option<Ast> {
     }
 
     pair.and_then(|(op, ops)| {
-            eval(op, env).and_then(|op| {
+            eval(op, env.clone()).and_then(|op| {
                 match op {
                     Ast::Lambda {
                         bindings: ref bs,
@@ -124,9 +140,9 @@ fn eval_combination(app: Vec<Ast>, env: &mut Env) -> Option<Ast> {
         // })
 }
 
-fn eval_define(n: String, val: Ast, env: &mut Env) -> Option<Ast> {
-    eval(&val, env).and_then(|val| {
-        env.set(n, val.clone());
+fn eval_define(n: String, val: Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
+    eval(&val, env.clone()).and_then(|val| {
+        env.borrow_mut().set(n, val.clone());
         Some(val)
     })
     // args.split_first()
@@ -154,14 +170,14 @@ fn eval_define(n: String, val: Ast, env: &mut Env) -> Option<Ast> {
     //     })
 }
 
-fn eval_let(bindings: Vec<Ast>, body: Ast, env: &mut Env) -> Option<Ast> {
-    build_let_env(bindings, env).and_then(|ref mut env| eval(&body, env))
+fn eval_let(bindings: Vec<Ast>, body: Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
+    build_let_env(bindings, env).and_then(|env| eval(&body, env))
 }
 
 const PAIR_CHUNK_SIZE: usize = 2;
 
-fn build_let_env<'a>(bindings: Vec<Ast>, env: &'a Env) -> Option<Env<'a>> {
-    let mut env = Env::empty(Some(Box::new(env)));
+fn build_let_env(bindings: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Rc<RefCell<Env>>> {
+    let env = Env::empty_with(Some(env));
     for pair in bindings.chunks(PAIR_CHUNK_SIZE) {
         if pair.len() != PAIR_CHUNK_SIZE {
             break;
@@ -172,10 +188,8 @@ fn build_let_env<'a>(bindings: Vec<Ast>, env: &'a Env) -> Option<Env<'a>> {
             _ => unreachable!(),
         };
 
-        if let Some(val) = eval(&pair[1], &mut env) {
-            env.set(key, val);
-        } else {
-            break;
+        if let Some(val) = eval(&pair[1], env.clone()) {
+            env.borrow_mut().set(key,val);
         }
     }
     Some(env)

@@ -1,13 +1,7 @@
 use std::fmt;
 use env::Env;
-
-#[derive(Debug,Clone)]
-pub enum TokenType {
-    OpenList,
-    CloseList,
-    Atom,
-    Comment,
-}
+use std::rc::Rc;
+use std::cell::RefCell;
 
 #[derive(Debug,Clone)]
 pub enum Primitive {
@@ -32,7 +26,8 @@ pub enum Ast {
     Do(Vec<Ast>),
     Lambda {
         bindings: Vec<Ast>,
-        body: Vec<Ast>, // env: Env,
+        body: Vec<Ast>,
+        env: Rc<RefCell<Env>>,
     },
     Define { name: String, val: Box<Ast> },
     Let { bindings: Vec<Ast>, body: Box<Ast> },

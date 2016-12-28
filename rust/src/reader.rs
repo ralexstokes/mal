@@ -266,6 +266,7 @@ fn make_fn(args: Vec<Ast>) -> Option<Ast> {
                 Some(Ast::Lambda {
                     bindings: seq.to_vec(),
                     body: rest.to_vec(),
+                    env: Env::empty(),
                 })
             }
             _ => None,

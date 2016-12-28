@@ -1,14 +1,19 @@
 use std::collections::HashMap;
-use std::default::Default;
+use std::rc::Rc;
+use std::cell::RefCell;
 use types::Ast;
 
-pub struct Env<'a> {
+#[derive(Debug)]
+pub struct Env {
     bindings: HashMap<String, Ast>,
-    outer: Option<Box<&'a Env<'a>>>,
+    outer: Option<Rc<RefCell<Env>>>,
 }
 
-impl<'a> Env<'a> {
-    pub fn new<'b>(outer: Option<Box<&'b Env>>, binds: Vec<&str>, exprs: Vec<Ast>) -> Env<'b> {
+impl Env {
+    pub fn new(outer: Option<Rc<RefCell<Env>>>,
+               binds: Vec<&str>,
+               exprs: Vec<Ast>)
+               -> Rc<RefCell<Env>> {
         let mut e = Env {
             bindings: HashMap::new(),
             outer: outer,
@@ -19,10 +24,14 @@ impl<'a> Env<'a> {
 
             e.set(bind.to_string(), expr)
         }
-        e
+        Rc::new(RefCell::new(e))
     }
 
-    pub fn empty<'b>(outer: Option<Box<&'b Env>>) -> Env<'b> {
+    pub fn empty() -> Rc<RefCell<Env>> {
+        Self::empty_with(None)
+    }
+
+    pub fn empty_with(outer: Option<Rc<RefCell<Env>>>) -> Rc<RefCell<Env>> {
         Self::new(outer, vec![], vec![])
     }
 
@@ -30,24 +39,30 @@ impl<'a> Env<'a> {
         self.bindings.insert(key, val);
     }
 
-    pub fn find(&self, key: &String) -> Option<&Env> {
-        if self.bindings.contains_key(key) {
-            return Some(self);
-        } else {
-            if let Some(ref env) = self.outer {
-                env.find(key)
-            } else {
-                None
-            }
-        }
-    }
+    // pub fn find(self, key: &String) -> Option<Box<Env>> {
+    //     if self.bindings.contains_key(key) {
+    //         Some(Box::new(self))
+    //     } else {
+    //         if let Some(env) = self.outer {
+    //             env.find(key)
+    //         } else {
+    //             None
+    //         }
+    //     }
+    // }
 
     pub fn get(&self, key: &String) -> Option<Ast> {
-        self.find(key)
-            .and_then(|env| env.bindings.get(key))
-            .map(|ast| ast.clone())
+        self.bindings
+            .get(key)
+            .and_then(|val| Some(val.clone()))
+            .or_else(|| {
+                if let Some(ref env) = self.outer {
+                    env.borrow().get(key)
+                } else {
+                    None
+                }
+            })
     }
-}
 
 impl<'a> Default for Env<'a> {
     fn default() -> Env<'a> {
@@ -71,6 +86,13 @@ impl<'a> Default for Env<'a> {
         Env::new(None, binds, exprs)
     }
 }
+
+// impl Default for Env {
+//     fn default() -> Env {
+//         // .iter()
+//         Env::new(None, binds, exprs)
+//     }
+// }
 
 fn i64_from_ast(a: Ast, b: Ast) -> (i64, i64) {
     let aa = match a {
