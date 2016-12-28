@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use types::{Ast, Primitive};
+use std::default::Default;
+use types::Ast;
 
 pub struct Env<'a> {
     bindings: HashMap<String, Ast>,
@@ -7,11 +8,22 @@ pub struct Env<'a> {
 }
 
 impl<'a> Env<'a> {
-    pub fn new<'b>(outer: Option<Box<&'b Env>>) -> Env<'b> {
-        Env {
+    pub fn new<'b>(outer: Option<Box<&'b Env>>, binds: Vec<&str>, exprs: Vec<Ast>) -> Env<'b> {
+        let mut e = Env {
             bindings: HashMap::new(),
             outer: outer,
+        };
+        for pair in binds.iter().zip(exprs.iter()) {
+            let bind = pair.0;
+            let expr = pair.1.clone();
+
+            e.set(bind.to_string(), expr)
         }
+        e
+    }
+
+    pub fn empty<'b>(outer: Option<Box<&'b Env>>) -> Env<'b> {
+        Self::new(outer, vec![], vec![])
     }
 
     pub fn set(&mut self, key: String, val: Ast) {
@@ -37,16 +49,27 @@ impl<'a> Env<'a> {
     }
 }
 
-const DEFINE: &'static str = "def!";
-const LET: &'static str = "let*";
+impl<'a> Default for Env<'a> {
+    fn default() -> Env<'a> {
+        let binds = vec![
+            "+",
+            // "-",
+            // "*",
+            // "/",
+        ];
+        let exprs: Vec<Ast> = vec![
+            // Primitive::Add,
+            // Primitive::Subtract,
+            // Primitive::Multiply,
+            // Primitive::Divide,
+            // Primitive::Define,
+            // Primitive::Let,
+        ];
+        // .iter()
+        // .map(|e| Ast::Operator(e.clone())).collect();
 
-pub fn add_default_bindings(env: &mut Env) {
-    env.set("+".to_string(), Ast::Operator(Primitive::Add));
-    env.set("-".to_string(), Ast::Operator(Primitive::Subtract));
-    env.set("*".to_string(), Ast::Operator(Primitive::Multiply));
-    env.set("/".to_string(), Ast::Operator(Primitive::Divide));
-    env.set(DEFINE.to_string(), Ast::Operator(Primitive::Define));
-    env.set(LET.to_string(), Ast::Operator(Primitive::Let));
+        Env::new(None, binds, exprs)
+    }
 }
 
 fn i64_from_ast(a: Ast, b: Ast) -> (i64, i64) {

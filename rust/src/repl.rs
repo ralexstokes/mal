@@ -2,7 +2,7 @@ use readline::Reader;
 use reader::read;
 use printer::print;
 use eval::eval;
-use env::{Env, add_default_bindings};
+use env::Env;
 
 pub struct Repl {
     reader: Reader,
@@ -18,8 +18,7 @@ impl Repl {
     }
 
     fn repl(&mut self) {
-        let mut env = Env::new(None);
-        add_default_bindings(&mut env);
+        let mut env = Env::default();
 
         loop {
             let line = self.reader.read();

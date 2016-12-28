@@ -46,10 +46,6 @@ fn typ_for(c: &str) -> TokenType {
         return TokenType::Comment;
     }
 
-    if c.starts_with('"') {
-        return TokenType::String;
-    }
-
     match c {
         "(" => TokenType::OpenList,
         ")" => TokenType::CloseList,
@@ -153,10 +149,6 @@ fn read_form(reader: &mut Reader) -> Option<Ast> {
             }
             TokenType::CloseList => {}
             TokenType::Comment => unreachable!(),
-            TokenType::String => {
-                result = read_string(reader);
-                break;
-            }
         }
     }
     result
@@ -187,28 +179,108 @@ fn read_list(reader: &mut Reader) -> Option<Ast> {
         return None;
     }
 
-    Some(Ast::List(list))
+    parse_list(&list).or(Some(Ast::Combination(list)))
 }
 
-fn read_string(reader: &mut Reader) -> Option<Ast> {
-    reader.next().and_then(|token| Some(Ast::String(token.value.clone())))
+const DO_FORM: &'static str = "do";
+const IF_FORM: &'static str = "if";
+const DEFINE_FORM: &'static str = "def!";
+const LET_FORM: &'static str = "let*";
+const FN_FORM: &'static str = "fn*";
+
+fn parse_list(list: &Vec<Ast>) -> Option<Ast> {
+    list.split_first()
+        .and_then(|(first, rest)| {
+            match *first {
+                Ast::Symbol(ref s) => {
+                    match s.as_str() {
+                        DO_FORM => Some(Ast::Do(rest.to_vec())),
+                        IF_FORM => make_if(rest.to_vec()),
+                        DEFINE_FORM => make_define(rest.to_vec()),
+                        LET_FORM => make_let(rest.to_vec()),
+                        FN_FORM => make_fn(rest.to_vec()),
+                        &_ => None,
+                    }
+                }
+                _ => None,
+            }
+        })
+}
+
+fn make_if(args: Vec<Ast>) -> Option<Ast> {
+    match args.len() {
+        2 => {
+            Some(Ast::If {
+                predicate: Box::new(args[0].clone()),
+                consequent: Box::new(args[1].clone()),
+                alternative: None,
+            })
+        }
+        3 => {
+            Some(Ast::If {
+                predicate: Box::new(args[0].clone()),
+                consequent: Box::new(args[1].clone()),
+                alternative: Some(Box::new(args[2].clone())),
+            })
+        }
+        _ => None,
+    }
+}
+
+fn make_define(args: Vec<Ast>) -> Option<Ast> {
+    args.split_first().and_then(|(key, vals)| {
+        match *key {
+            Ast::Symbol(ref s) => {
+                vals.split_first().and_then(|(val, _)| {
+                    Some(Ast::Define {
+                        name: s.clone(),
+                        val: Box::new(val.clone()),
+                    })
+                })
+            }
+            _ => None,
+        }
+    })
+}
+
+fn make_let(args: Vec<Ast>) -> Option<Ast> {
+    args.split_first().and_then(|(bindings, body)| {
+        match *bindings {
+            Ast::Combination(ref seq) => {
+                body.split_first().and_then(|(body, _)| {
+                    Some(Ast::Let {
+                        bindings: seq.to_vec(),
+                        body: Box::new(body.clone()),
+                    })
+                })
+            }
+            _ => None,
+        }
+    })
+}
+
+fn make_fn(args: Vec<Ast>) -> Option<Ast> {
+    args.split_first().and_then(|(first, rest)| {
+        match *first {
+            Ast::Combination(ref seq) => {
+                Some(Ast::Lambda {
+                    bindings: seq.to_vec(),
+                    body: rest.to_vec(),
+                })
+            }
+            _ => None,
+        }
+    })
 }
 
 fn read_atom(reader: &mut Reader) -> Option<Ast> {
     reader.next().and_then(|token| {
-        number_from(&token)
-            .or(nil_from(&token))
-            .or(true_from(&token))
-            .or(false_from(&token))
+        nil_from(&token)
+            .or(boolean_from(&token))
+            .or(number_from(&token))
+            .or(string_from(&token))
             .or(symbol_from(&token))
     })
-}
-
-fn number_from(token: &Token) -> Option<Ast> {
-    match token.value.parse::<i64>() {
-        Ok(n) => Some(Ast::Number(n)),
-        Err(_) => None,
-    }
 }
 
 fn nil_from(token: &Token) -> Option<Ast> {
@@ -218,17 +290,27 @@ fn nil_from(token: &Token) -> Option<Ast> {
     }
 }
 
-fn true_from(token: &Token) -> Option<Ast> {
-    match token.value.as_str() {
-        "true" => Some(Ast::True),
-        _ => None,
+fn boolean_from(token: &Token) -> Option<Ast> {
+    match token.value.parse::<bool>() {
+        Ok(p) => Some(Ast::Boolean(p)),
+        Err(_) => None,
     }
 }
 
-fn false_from(token: &Token) -> Option<Ast> {
-    match token.value.as_str() {
-        "false" => Some(Ast::False),
-        _ => None,
+fn number_from(token: &Token) -> Option<Ast> {
+    match token.value.parse::<i64>() {
+        Ok(n) => Some(Ast::Number(n)),
+        Err(_) => None,
+    }
+}
+
+fn string_from(token: &Token) -> Option<Ast> {
+    let s = &token.value;
+
+    if s.as_str().starts_with('"') {
+        Some(Ast::String(s.clone()))
+    } else {
+        None
     }
 }
 
