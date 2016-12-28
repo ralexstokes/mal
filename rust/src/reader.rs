@@ -1,5 +1,6 @@
 use regex::{Regex, Captures};
-use types::{Ast, TokenType};
+use env::Env;
+use types::Ast;
 
 pub fn read(input: String) -> Option<Ast> {
     let tokens = tokenizer(input);
@@ -29,16 +30,13 @@ fn test_tokenizer() {
 }
 
 fn token_from(capture: Captures) -> Token {
-    let c = capture.at(0).unwrap().trim_matches(is_whitespace);
+    // select 2nd capture that lacks whitespace
+    let c = capture.at(1).unwrap();
 
     Token {
         typ: typ_for(c),
         value: c.to_string(),
     }
-}
-
-fn is_whitespace(c: char) -> bool {
-    c == ',' || c.is_whitespace()
 }
 
 fn typ_for(c: &str) -> TokenType {
@@ -52,6 +50,15 @@ fn typ_for(c: &str) -> TokenType {
         _ => TokenType::Atom,
     }
 }
+
+#[derive(Debug,Clone)]
+pub enum TokenType {
+    OpenList,
+    CloseList,
+    Atom,
+    Comment,
+}
+
 
 #[derive(Debug,Clone)]
 pub struct Token {
@@ -147,8 +154,8 @@ fn read_form(reader: &mut Reader) -> Option<Ast> {
                 result = read_list(reader);
                 break;
             }
-            TokenType::CloseList => {}
-            TokenType::Comment => unreachable!(),
+            TokenType::CloseList => continue,
+            TokenType::Comment => break,
         }
     }
     result
