@@ -1,4 +1,5 @@
 use rustyline;
+use term;
 use std::env;
 use std::fs::File;
 use std::io;
@@ -22,7 +23,14 @@ impl DefaultReader {
     }
 
     pub fn read(&mut self) -> Option<String> {
-        print!("{}", self.prompt);
+        let mut t = term::stdout().unwrap();
+
+        t.fg(term::color::YELLOW).unwrap();
+        t.attr(term::Attr::Bold).unwrap();
+        write!(t, "{}", self.prompt).unwrap();
+
+        t.reset().unwrap();
+
         io::stdout()
             .flush()
             .expect("could not flush line");
