@@ -34,18 +34,6 @@ impl Env {
         self.bindings.insert(key, val);
     }
 
-    // pub fn find(self, key: &String) -> Option<Box<Env>> {
-    //     if self.bindings.contains_key(key) {
-    //         Some(Box::new(self))
-    //     } else {
-    //         if let Some(env) = self.outer {
-    //             env.find(key)
-    //         } else {
-    //             None
-    //         }
-    //     }
-    // }
-
     pub fn get(&self, key: &String) -> Option<Ast> {
         self.bindings
             .get(key)
