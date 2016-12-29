@@ -12,7 +12,7 @@ pub enum Ast {
     Symbol(String),
     Lambda {
         params: Vec<Ast>,
-        body: Box<Ast>,
+        body: Vec<Ast>,
         env: Env,
     },
     Fn(HostFn),

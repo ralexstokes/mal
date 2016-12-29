@@ -48,20 +48,11 @@ fn apply(operator: &Ast, operands: Vec<Ast>, env: Env) -> Option<Ast> {
 
     eval(operator, env).and_then(|evop| {
         match evop {
-            Ast::Lambda { ref params, ref body, ref env } => {
-                let bindings = params.into_iter()
-                    .map(|p| {
-                        match *p {
-                            Ast::Symbol(ref s) => s.clone(),
-                            _ => unreachable!(),
-                        }
-                    })
-                    .zip(evops.into_iter())
-                    .collect();
-                let ns = ns::new(bindings);
+            Ast::Lambda { params, body, env } => {
+                let ns = ns::new_from(params, evops);
                 let new_env = new(Some(env.clone()), ns);
 
-                eval(body, new_env)
+                eval_sequence(body, new_env)
             }
             Ast::Fn(f) => f(evops.to_vec()),
             _ => Some(evop.clone()),
@@ -154,12 +145,6 @@ fn build_let_env(bindings: Vec<Ast>, env: Env) -> Option<Env> {
     Some(env)
 }
 
-fn do_from(body: &[Ast]) -> Ast {
-    let mut seq = vec![Ast::Symbol("do".to_string())];
-    seq.append(&mut body.to_vec());
-    Ast::List(seq)
-}
-
 fn eval_lambda(seq: Vec<Ast>, env: Env) -> Option<Ast> {
     if seq.len() < 2 {
         return None;
@@ -170,11 +155,11 @@ fn eval_lambda(seq: Vec<Ast>, env: Env) -> Option<Ast> {
         _ => unreachable!(),
     };
 
-    let body = do_from(&seq[1..]);
+    let body = seq[1..].to_vec();
 
     Ast::Lambda {
             params: params,
-            body: Box::new(body),
+            body: body,
             env: env,
         }
         .into()

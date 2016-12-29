@@ -14,6 +14,47 @@ pub fn new(bindings: Vec<(String, Ast)>) -> Ns {
     ns
 }
 
+pub fn new_from(params: Vec<Ast>, exprs: Vec<Ast>) -> Ns {
+    let params = params.iter()
+        .map(|p| {
+            match *p {
+                Ast::Symbol(ref s) => s.clone(),
+                _ => unreachable!(),
+            }
+        })
+        .collect::<Vec<_>>();
+    let all_params = params.split(|p| p == "&")
+        .map(|a| a.clone())
+        .collect::<Vec<_>>();
+
+    let mut bound_params = all_params[0].to_vec();
+
+    let mut bound_exprs = exprs.iter()
+        .take(bound_params.len())
+        .map(|a| a.clone())
+        .collect::<Vec<_>>();
+
+    let var_binding = all_params.get(1)
+        .and_then(|var_params| var_params.get(0))
+        .and_then(|var_param| {
+            let var_exprs = exprs.into_iter()
+                .skip(bound_exprs.len())
+                .collect::<Vec<_>>();
+            (var_param.clone(), Ast::List(var_exprs)).into()
+        });
+
+    if let Some((param, expr)) = var_binding {
+        bound_params.push(param);
+        bound_exprs.push(expr);
+    }
+
+    let bindings = bound_params.into_iter()
+        .zip(bound_exprs.into_iter())
+        .map(|(p, e)| (p.clone(), e.clone()))
+        .collect::<Vec<_>>();
+    new(bindings)
+}
+
 pub fn core() -> Ns {
     let mappings: Vec<(&'static str, HostFn)> = vec![("+", add),
                                                      ("-", sub),
