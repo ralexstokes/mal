@@ -3,14 +3,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use env::Env;
 
-#[derive(Debug,Clone)]
-pub enum Primitive {
-    Add,
-    Subtract,
-    Multiply,
-    Divide,
-}
-
 pub type HostFn = fn(Vec<Ast>) -> Option<Ast>;
 
 #[derive(Debug,Clone)]
