@@ -11,18 +11,18 @@ pub fn eval(ast: &Ast, env: Env) -> Option<Ast> {
         &Ast::String(_) => Some(ast.clone()),
         &Ast::Number(_) => Some(ast.clone()),
         &Ast::Symbol(ref s) => env.borrow().get(s),
-        &Ast::If { predicate: ref p, consequent: ref c, alternative: ref a } => {
-            match *a {
-                Some(ref alt) => eval_if(*p.clone(), *c.clone(), Some(*alt.clone()), env),
-                None => eval_if(*p.clone(), *c.clone(), None, env),
-            }
-        }
-        &Ast::Do(ref seq) => eval_do(seq.to_vec(), env),
+        // &Ast::If { predicate: ref p, consequent: ref c, alternative: ref a } => {
+        //     match *a {
+        //         Some(ref alt) => eval_if(*p.clone(), *c.clone(), Some(*alt.clone()), env),
+        //         None => eval_if(*p.clone(), *c.clone(), None, env),
+        //     }
+        // }
+        // &Ast::Do(ref seq) => eval_do(seq.to_vec(), env),
         &Ast::Lambda { .. } => Some(ast.clone()),
         &Ast::Fn(_) => Some(ast.clone()),
-        &Ast::Define { name: ref n, val: ref v } => eval_define(n.clone(), *v.clone(), env),
-        &Ast::Let { ref bindings, ref body } => eval_let(bindings.to_vec(), *body.clone(), env),
-        &Ast::Combination(ref seq) => eval_combination(seq.to_vec(), env),
+        // &Ast::Define { name: ref n, val: ref v } => eval_define(n.clone(), *v.clone(), env),
+        // &Ast::Let { ref bindings, ref body } => eval_let(bindings.to_vec(), *body.clone(), env),
+        &Ast::List(ref seq) => eval_combination(seq.to_vec(), env),
     }
 }
 
@@ -69,7 +69,7 @@ fn eval_combination(app: Vec<Ast>, env: Env) -> Option<Ast> {
     let pair = app.split_first();
 
     if pair.is_none() {
-        return Some(Ast::Combination(vec![]));
+        return Some(Ast::List(vec![]));
     }
 
     pair.and_then(|(op, ops)| {

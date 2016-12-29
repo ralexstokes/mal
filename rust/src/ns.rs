@@ -100,14 +100,14 @@ fn prn(args: Vec<Ast>) -> Option<Ast> {
 }
 
 fn to_list(args: Vec<Ast>) -> Option<Ast> {
-    Ast::Combination(args).into()
+    Ast::List(args).into()
 }
 
 fn is_list(args: Vec<Ast>) -> Option<Ast> {
     args.first()
         .and_then(|a| {
             let is = match a.clone() {
-                Ast::Combination(_) => true,
+                Ast::List(_) => true,
                 _ => false,
             };
             Ast::Boolean(is).into()
@@ -118,7 +118,7 @@ fn is_empty(args: Vec<Ast>) -> Option<Ast> {
     args.first()
         .and_then(|a| {
             match a.clone() {
-                Ast::Combination(seq) => Ast::Boolean(seq.is_empty()).into(),
+                Ast::List(seq) => Ast::Boolean(seq.is_empty()).into(),
                 _ => None,
             }
         })
@@ -128,7 +128,7 @@ fn count_of(args: Vec<Ast>) -> Option<Ast> {
     args.first()
         .and_then(|a| {
             match a.clone() {
-                Ast::Combination(seq) => Ast::Number(seq.len() as i64).into(),
+                Ast::List(seq) => Ast::Number(seq.len() as i64).into(),
                 Ast::Nil => Ast::Number(0).into(),
                 _ => None,
             }

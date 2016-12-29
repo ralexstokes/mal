@@ -20,21 +20,21 @@ pub enum Ast {
     String(String),
     Number(i64),
     Symbol(String),
-    If {
-        predicate: Box<Ast>,
-        consequent: Box<Ast>,
-        alternative: Option<Box<Ast>>,
-    },
-    Do(Vec<Ast>),
+    // If {
+    //     predicate: Box<Ast>,
+    //     consequent: Box<Ast>,
+    //     alternative: Option<Box<Ast>>,
+    // },
+    // Do(Vec<Ast>),
     Lambda {
         bindings: Vec<Ast>,
         body: Box<Ast>,
         env: Env,
     },
     Fn(HostFn),
-    Define { name: String, val: Box<Ast> },
-    Let { bindings: Vec<Ast>, body: Box<Ast> },
-    Combination(Vec<Ast>),
+    // Define { name: String, val: Box<Ast> },
+    // Let { bindings: Vec<Ast>, body: Box<Ast> },
+    List(Vec<Ast>),
 }
 
 // Pretty printer for debug
@@ -46,22 +46,22 @@ impl fmt::Display for Ast {
             Ast::String(ref s) => write!(f, "String({})", s),
             Ast::Number(ref n) => write!(f, "Number({})", n),
             Ast::Symbol(ref s) => write!(f, "Symbol({})", s),
-            Ast::If { predicate: ref p, consequent: ref c, alternative: ref a } => {
-                let _ = write!(f, "If({},{})", *p.clone(), *c.clone());
-                match *a {
-                    Some(ref ast) => {
-                        let _ = write!(f, ",{}", *ast.clone());
-                    }
-                    None => {}
-                }
-                write!(f, ")")
-            }
-            Ast::Do(ref seq) => pretty_print_do(f, seq, 0),
+            // Ast::If { predicate: ref p, consequent: ref c, alternative: ref a } => {
+            //     let _ = write!(f, "If({},{})", *p.clone(), *c.clone());
+            //     match *a {
+            //         Some(ref ast) => {
+            //             let _ = write!(f, ",{}", *ast.clone());
+            //         }
+            //         None => {}
+            //     }
+            //     write!(f, ")")
+            // }
+            // Ast::Do(ref seq) => pretty_print_do(f, seq, 0),
             Ast::Lambda { .. } => write!(f, "#<fn>"),
             Ast::Fn(_) => write!(f, "#<primitive-fn>"),
-            Ast::Define { name: ref n, val: ref v } => write!(f, "Define({},{})", n, *v),
-            Ast::Let { bindings: ref bs, ref body } => write!(f, "Let({:?},{:?})", bs, body),
-            Ast::Combination(ref seq) => pretty_print_list(f, seq, 0),
+            // Ast::Define { name: ref n, val: ref v } => write!(f, "Define({},{})", n, *v),
+            // Ast::Let { bindings: ref bs, ref body } => write!(f, "Let({:?},{:?})", bs, body),
+            Ast::List(ref seq) => pretty_print_list(f, seq, 0),
         }
     }
 }
@@ -107,7 +107,7 @@ fn pretty_print_seq(prefix: &'static str,
     }
     for (i, l) in seq.iter().enumerate() {
         match l {
-            &Ast::Combination(ref seq) => {
+            &Ast::List(ref seq) => {
                 let result = pretty_print_list(f, seq, depth + 1);
                 match result {
                     Err(_) => return result,
