@@ -58,7 +58,15 @@ fn eval_lambda(params: Vec<Ast>,
                args: Vec<Ast>,
                env: Rc<RefCell<Env>>)
                -> Option<Ast> {
-    let bindings = params.into_iter().zip(args.into_iter()).collect();
+    let bindings = params.into_iter()
+        .map(|p| {
+            match p {
+                Ast::Symbol(s) => s.clone(),
+                _ => unreachable!(),
+            }
+        })
+        .zip(args.into_iter())
+        .collect();
     let ns = ns::new(bindings);
     let new_env = Env::new(Some(env), ns);
 
@@ -73,6 +81,19 @@ fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
     }
 
     pair.and_then(|(op, ops)| {
+        let mut eval_ops: Vec<Ast> = vec![];
+        for op in ops {
+            println!("ast in question: {}", op);
+            match eval(op, env.clone()) {
+                Some(f) => {
+                    println!("got {}", f);
+                    eval_ops.push(f)
+                }
+                None => {
+                    return None;
+                }
+            }
+        }
         eval(op, env.clone()).and_then(|op| {
             match op {
                 Ast::Lambda { ref bindings, ref body, ref env } => {
@@ -85,12 +106,7 @@ fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
                         None
                     }
                 }
-                Ast::Fn(f) => {
-                    let ops = ops.iter()
-                        .map(|ast| eval(ast, env.clone()).unwrap())
-                        .collect::<Vec<_>>();
-                    f(ops.to_vec())
-                }
+                Ast::Fn(f) => f(eval_ops.to_vec()),
                 _ => Some(op.clone()),
             }
         })

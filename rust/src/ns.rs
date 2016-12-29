@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use types::{Ast, HostFn};
 use printer::print;
 
-pub type Ns = HashMap<Ast, Ast>;
+pub type Ns = HashMap<String, Ast>;
 
-pub fn new(bindings: Vec<(Ast, Ast)>) -> Ns {
+pub fn new(bindings: Vec<(String, Ast)>) -> Ns {
     let mut ns = Ns::new();
 
     for binding in bindings {
