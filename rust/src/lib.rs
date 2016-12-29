@@ -13,3 +13,4 @@ pub mod reader;
 pub mod types;
 pub mod printer;
 pub mod env;
+pub mod ns;

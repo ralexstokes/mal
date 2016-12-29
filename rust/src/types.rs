@@ -11,7 +11,7 @@ pub enum Primitive {
     Divide,
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub enum Ast {
     Nil,
     Boolean(bool),

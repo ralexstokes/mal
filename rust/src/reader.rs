@@ -1,5 +1,4 @@
 use regex::{Regex, Captures};
-use env::Env;
 use types::Ast;
 
 pub fn read(input: String) -> Option<Ast> {

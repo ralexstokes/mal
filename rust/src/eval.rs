@@ -1,4 +1,5 @@
 use types::Ast;
+use ns;
 use std::rc::Rc;
 use std::cell::RefCell;
 use env::Env;
@@ -139,7 +140,7 @@ fn build_let_env(bindings: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Rc<RefCell
         };
 
         if let Some(val) = eval(&pair[1], env.clone()) {
-            env.borrow_mut().set(key,val);
+            env.borrow_mut().set(key, val);
         }
     }
     Some(env)
