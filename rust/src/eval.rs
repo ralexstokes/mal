@@ -1,29 +1,72 @@
 use types::Ast;
 use ns;
-use std::rc::Rc;
-use std::cell::RefCell;
-use env::{Env, empty_with, new};
+use env::{Env, empty_from, new};
 
 pub fn eval(ast: &Ast, env: Env) -> Option<Ast> {
     match ast {
-        &Ast::Nil => Some(ast.clone()),
-        &Ast::Boolean(_) => Some(ast.clone()),
-        &Ast::String(_) => Some(ast.clone()),
-        &Ast::Number(_) => Some(ast.clone()),
         &Ast::Symbol(ref s) => env.borrow().get(s),
-        // &Ast::If { predicate: ref p, consequent: ref c, alternative: ref a } => {
-        //     match *a {
-        //         Some(ref alt) => eval_if(*p.clone(), *c.clone(), Some(*alt.clone()), env),
-        //         None => eval_if(*p.clone(), *c.clone(), None, env),
-        //     }
-        // }
-        // &Ast::Do(ref seq) => eval_do(seq.to_vec(), env),
-        &Ast::Lambda { .. } => Some(ast.clone()),
-        &Ast::Fn(_) => Some(ast.clone()),
-        // &Ast::Define { name: ref n, val: ref v } => eval_define(n.clone(), *v.clone(), env),
-        // &Ast::Let { ref bindings, ref body } => eval_let(bindings.to_vec(), *body.clone(), env),
-        &Ast::List(ref seq) => eval_combination(seq.to_vec(), env),
+        &Ast::List(ref seq) => eval_list(seq.to_vec(), env),
+        _ => ast.clone().into(), // self-evaluating
     }
+}
+
+const IF_FORM: &'static str = "if";
+const DO_FORM: &'static str = "do";
+const DEFINE_FORM: &'static str = "def!";
+const LET_FORM: &'static str = "let*";
+const LAMBDA_FORM: &'static str = "fn*";
+
+fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+    if seq.len() == 0 {
+        return Some(Ast::List(seq));
+    }
+
+    seq.split_first()
+        .and_then(|(operator, operands)| {
+            match operator {
+                &Ast::Symbol(ref s) => {
+                    match s.as_str() {
+                        IF_FORM => eval_if(operands.to_vec(), env),
+                        DO_FORM => eval_do(operands.to_vec(), env),
+                        DEFINE_FORM => eval_define(operands.to_vec(), env),
+                        LET_FORM => eval_let(operands.to_vec(), env),
+                        LAMBDA_FORM => eval_lambda(operands.to_vec(), env),
+                        _ => apply(operator, operands.to_vec(), env),
+                    }
+                }
+                _ => apply(operator, operands.to_vec(), env),
+            }
+        })
+}
+
+fn apply(operator: &Ast, operands: Vec<Ast>, env: Env) -> Option<Ast> {
+    let evops = operands.iter()
+        .map(|operand| eval(operand, env.clone()))
+        .filter(|operand| operand.is_some())
+        .map(|operand| operand.unwrap())
+        .collect::<Vec<_>>();
+
+    eval(operator, env).and_then(|evop| {
+        match evop {
+            Ast::Lambda { ref params, ref body, ref env } => {
+                let bindings = params.into_iter()
+                    .map(|p| {
+                        match *p {
+                            Ast::Symbol(ref s) => s.clone(),
+                            _ => unreachable!(),
+                        }
+                    })
+                    .zip(evops.into_iter())
+                    .collect();
+                let ns = ns::new(bindings);
+                let new_env = new(Some(env.clone()), ns);
+
+                eval(body, new_env)
+            }
+            Ast::Fn(f) => f(evops.to_vec()),
+            _ => Some(evop.clone()),
+        }
+    })
 }
 
 fn eval_do(seq: Vec<Ast>, env: Env) -> Option<Ast> {
@@ -33,7 +76,19 @@ fn eval_do(seq: Vec<Ast>, env: Env) -> Option<Ast> {
         .unwrap_or(None)
 }
 
-fn eval_if(predicate: Ast, consequent: Ast, alternative: Option<Ast>, env: Env) -> Option<Ast> {
+fn eval_if(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+    if seq.len() < 2 {
+        return None;
+    }
+
+    let ref predicate = seq[0];
+    let ref consequent = seq[1];
+    let alternative = if seq.len() >= 3 {
+        Some(seq[2].clone())
+    } else {
+        None
+    };
+
     eval(&predicate, env.clone()).and_then(|p| {
         match p {
             Ast::Nil |
@@ -97,4 +152,30 @@ fn build_let_env(bindings: Vec<Ast>, env: Env) -> Option<Env> {
         }
     }
     Some(env)
+}
+
+fn do_from(body: &[Ast]) -> Ast {
+    let mut seq = vec![Ast::Symbol("do".to_string())];
+    seq.append(&mut body.to_vec());
+    Ast::List(seq)
+}
+
+fn eval_lambda(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+    if seq.len() < 2 {
+        return None;
+    }
+
+    let params = match seq[0] {
+        Ast::List(ref params) => params.to_vec(),
+        _ => unreachable!(),
+    };
+
+    let body = do_from(&seq[1..]);
+
+    Ast::Lambda {
+            params: params,
+            body: Box::new(body),
+            env: env,
+        }
+        .into()
 }

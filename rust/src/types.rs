@@ -1,6 +1,4 @@
 use std::fmt;
-use std::rc::Rc;
-use std::cell::RefCell;
 use env::Env;
 
 pub type HostFn = fn(Vec<Ast>) -> Option<Ast>;
@@ -12,20 +10,12 @@ pub enum Ast {
     String(String),
     Number(i64),
     Symbol(String),
-    // If {
-    //     predicate: Box<Ast>,
-    //     consequent: Box<Ast>,
-    //     alternative: Option<Box<Ast>>,
-    // },
-    // Do(Vec<Ast>),
     Lambda {
-        bindings: Vec<Ast>,
+        params: Vec<Ast>,
         body: Box<Ast>,
         env: Env,
     },
     Fn(HostFn),
-    // Define { name: String, val: Box<Ast> },
-    // Let { bindings: Vec<Ast>, body: Box<Ast> },
     List(Vec<Ast>),
 }
 
@@ -38,21 +28,8 @@ impl fmt::Display for Ast {
             Ast::String(ref s) => write!(f, "String({})", s),
             Ast::Number(ref n) => write!(f, "Number({})", n),
             Ast::Symbol(ref s) => write!(f, "Symbol({})", s),
-            // Ast::If { predicate: ref p, consequent: ref c, alternative: ref a } => {
-            //     let _ = write!(f, "If({},{})", *p.clone(), *c.clone());
-            //     match *a {
-            //         Some(ref ast) => {
-            //             let _ = write!(f, ",{}", *ast.clone());
-            //         }
-            //         None => {}
-            //     }
-            //     write!(f, ")")
-            // }
-            // Ast::Do(ref seq) => pretty_print_do(f, seq, 0),
             Ast::Lambda { .. } => write!(f, "#<fn>"),
             Ast::Fn(_) => write!(f, "#<primitive-fn>"),
-            // Ast::Define { name: ref n, val: ref v } => write!(f, "Define({},{})", n, *v),
-            // Ast::Let { bindings: ref bs, ref body } => write!(f, "Let({:?},{:?})", bs, body),
             Ast::List(ref seq) => pretty_print_list(f, seq, 0),
         }
     }
@@ -62,10 +39,6 @@ const SPACER: &'static str = "  ";
 
 fn pretty_print_list(f: &mut fmt::Formatter, seq: &Vec<Ast>, depth: i32) -> fmt::Result {
     pretty_print_seq("List", f, seq, depth)
-}
-
-fn pretty_print_do(f: &mut fmt::Formatter, seq: &Vec<Ast>, depth: i32) -> fmt::Result {
-    pretty_print_seq("Do", f, seq, depth)
 }
 
 fn pretty_print_seq(prefix: &'static str,
