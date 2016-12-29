@@ -24,11 +24,11 @@ pub fn core() -> Env {
 }
 
 pub fn empty() -> Env {
-    empty_with(None)
+    new(None, ns::Ns::new())
 }
 
-pub fn empty_with(outer: Option<Env>) -> Env {
-    new(outer, ns::Ns::new())
+pub fn empty_from(outer: Env) -> Env {
+    new(Some(outer), ns::Ns::new())
 }
 
 impl EnvData {

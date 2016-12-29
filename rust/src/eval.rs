@@ -49,73 +49,39 @@ fn eval_if(predicate: Ast, consequent: Ast, alternative: Option<Ast>, env: Env) 
     })
 }
 
-fn eval_lambda(params: Vec<Ast>, exprs: Box<Ast>, args: Vec<Ast>, env: Env) -> Option<Ast> {
-    let bindings = params.into_iter()
-        .map(|p| {
-            match p {
-                Ast::Symbol(s) => s.clone(),
-                _ => unreachable!(),
-            }
-        })
-        .zip(args.into_iter())
-        .collect();
-    let ns = ns::new(bindings);
-    let new_env = new(Some(env), ns);
-
-    eval(&exprs, new_env)
-}
-
-fn eval_combination(app: Vec<Ast>, env: Env) -> Option<Ast> {
-    let pair = app.split_first();
-
-    if pair.is_none() {
-        return Some(Ast::List(vec![]));
+fn eval_define(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+    if seq.len() < 2 {
+        return None;
     }
 
-    pair.and_then(|(op, ops)| {
-        let mut eval_ops: Vec<Ast> = vec![];
-        for op in ops {
-            println!("ast in question: {}", op);
-            match eval(op, env.clone()) {
-                Some(f) => {
-                    println!("got {}", f);
-                    eval_ops.push(f)
-                }
-                None => {
-                    return None;
-                }
-            }
-        }
-        eval(op, env.clone()).and_then(|op| {
-            match op {
-                Ast::Lambda { ref bindings, ref body, ref env } => {
-                    eval_lambda(bindings.to_vec(),
-                                body.clone(),
-                                eval_ops.to_vec(),
-                                env.clone())
-                }
-                Ast::Fn(f) => f(eval_ops.to_vec()),
-                _ => Some(op.clone()),
-            }
-        })
-    })
-}
+    let n = match seq[0] {
+        Ast::Symbol(ref s) => s.clone(),
+        _ => unreachable!(),
+    };
+    let ref val = seq[1];
 
-fn eval_define(n: String, val: Ast, env: Env) -> Option<Ast> {
-    eval(&val, env.clone()).and_then(|val| {
+    eval(val, env.clone()).and_then(|val| {
         env.borrow_mut().set(n, val.clone());
         Some(val)
     })
 }
 
-fn eval_let(bindings: Vec<Ast>, body: Ast, env: Env) -> Option<Ast> {
-    build_let_env(bindings, env).and_then(|env| eval(&body, env))
+fn eval_let(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+    seq.split_first()
+        .and_then(|(bindings, body)| {
+            if let Ast::List(ref seq) = *bindings {
+                let body = Ast::List(body.to_vec());
+                build_let_env(seq.to_vec(), env).and_then(|env| eval(&body, env))
+            } else {
+                None
+            }
+        })
 }
 
 const PAIR_CHUNK_SIZE: usize = 2;
 
 fn build_let_env(bindings: Vec<Ast>, env: Env) -> Option<Env> {
-    let env = empty_with(Some(env));
+    let env = empty_from(env);
     for pair in bindings.chunks(PAIR_CHUNK_SIZE) {
         if pair.len() != PAIR_CHUNK_SIZE {
             break;
