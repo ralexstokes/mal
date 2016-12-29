@@ -8,6 +8,8 @@ pub enum Primitive {
     Divide,
 }
 
+pub type HostFn = fn(Vec<Ast>) -> Option<Ast>;
+
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub enum Ast {
     Nil,
@@ -22,7 +24,7 @@ pub enum Ast {
     },
     Do(Vec<Ast>),
     Lambda { bindings: Vec<Ast>, body: Box<Ast> },
-    Fn(fn(Vec<Ast>) -> Ast),
+    Fn(HostFn),
     Define { name: String, val: Box<Ast> },
     Let { bindings: Vec<Ast>, body: Box<Ast> },
     Combination(Vec<Ast>),

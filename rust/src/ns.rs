@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use types::Ast;
+use types::{Ast, HostFn};
+use printer::print;
 
 pub type Ns = HashMap<Ast, Ast>;
 
@@ -13,10 +14,21 @@ pub fn new(bindings: Vec<(Ast, Ast)>) -> Ns {
     ns
 }
 
-type AstReducer = fn(Vec<Ast>) -> Ast;
 pub fn core() -> Ns {
-    let mappings: Vec<(&'static str, AstReducer)> = vec![("+", add), ("-", sub), ("*", mul),
-                                                         ("/", div)];
+    let mappings: Vec<(&'static str, HostFn)> = vec![("+", add),
+                                                     ("-", sub),
+                                                     ("*", mul),
+                                                     ("/", div),
+                                                     ("prn", prn),
+                                                     ("list", to_list),
+                                                     ("list?", is_list),
+                                                     ("empty?", is_empty),
+                                                     ("count", count_of),
+                                                     ("=", is_eq),
+                                                     ("<", lt),
+                                                     ("<=", lte),
+                                                     (">", gt),
+                                                     (">=", gte)];
     let bindings = mappings.iter()
         .map(|&(k, v)| (Ast::Symbol(k.to_string()), Ast::Fn(v)))
         .collect();
@@ -37,7 +49,7 @@ fn i64_from_ast(a: Ast, b: Ast) -> (i64, i64) {
     (aa, bb)
 }
 
-fn fold_first<F>(xs: Vec<Ast>, f: F) -> Ast
+fn fold_first<F>(xs: Vec<Ast>, f: F) -> Option<Ast>
     where F: Fn(Ast, Ast) -> Ast
 {
     xs.split_first()
@@ -47,33 +59,112 @@ fn fold_first<F>(xs: Vec<Ast>, f: F) -> Ast
                 .fold(first.clone(), f);
             Some(result)
         })
-        .unwrap_or(Ast::Nil)
 }
 
-fn add(xs: Vec<Ast>) -> Ast {
+fn add(xs: Vec<Ast>) -> Option<Ast> {
     fold_first(xs, |a, b| {
         let (a, b) = i64_from_ast(a, b);
         Ast::Number(a + b)
     })
 }
 
-fn sub(xs: Vec<Ast>) -> Ast {
+fn sub(xs: Vec<Ast>) -> Option<Ast> {
     fold_first(xs, |a, b| {
         let (a, b) = i64_from_ast(a, b);
         Ast::Number(a - b)
     })
 }
 
-fn mul(xs: Vec<Ast>) -> Ast {
+fn mul(xs: Vec<Ast>) -> Option<Ast> {
     fold_first(xs, |a, b| {
         let (a, b) = i64_from_ast(a, b);
         Ast::Number(a * b)
     })
 }
 
-fn div(xs: Vec<Ast>) -> Ast {
+fn div(xs: Vec<Ast>) -> Option<Ast> {
     fold_first(xs, |a, b| {
         let (a, b) = i64_from_ast(a, b);
         Ast::Number(a / b)
     })
+}
+
+fn prn(args: Vec<Ast>) -> Option<Ast> {
+    args.first()
+        .and_then(|a| print(a.clone()))
+        .and_then(|s| {
+            println!("{}", s);
+            Ast::Nil.into()
+        })
+}
+
+fn to_list(args: Vec<Ast>) -> Option<Ast> {
+    Ast::Combination(args).into()
+}
+
+fn is_list(args: Vec<Ast>) -> Option<Ast> {
+    args.first()
+        .and_then(|a| {
+            let is = match a.clone() {
+                Ast::Combination(_) => true,
+                _ => false,
+            };
+            Ast::Boolean(is).into()
+        })
+}
+
+fn is_empty(args: Vec<Ast>) -> Option<Ast> {
+    args.first()
+        .and_then(|a| {
+            match a.clone() {
+                Ast::Combination(seq) => Ast::Boolean(seq.is_empty()).into(),
+                _ => None,
+            }
+        })
+}
+
+fn count_of(args: Vec<Ast>) -> Option<Ast> {
+    args.first()
+        .and_then(|a| {
+            match a.clone() {
+                Ast::Combination(seq) => Ast::Number(seq.len() as i64).into(),
+                _ => None,
+            }
+        })
+}
+fn is_eq(args: Vec<Ast>) -> Option<Ast> {
+    args.split_first()
+        .and_then(|(first, rest)| {
+            rest.split_first()
+                .and_then(|(second, _)| Ast::Boolean(first == second).into())
+        })
+}
+
+fn args_are<F>(args: Vec<Ast>, f: F) -> Option<Ast>
+    where F: Fn(i64, i64) -> bool
+{
+    args.split_first()
+        .and_then(|(first, rest)| {
+            rest.split_first()
+                .and_then(|(second, _)| {
+                    let (a, b) = i64_from_ast(first.clone(), second.clone());
+                    Ast::Boolean(f(a, b)).into()
+                })
+        })
+}
+
+fn lt(args: Vec<Ast>) -> Option<Ast> {
+    args_are(args, |a, b| a < b)
+}
+
+fn lte(args: Vec<Ast>) -> Option<Ast> {
+    args_are(args, |a, b| a <= b)
+}
+
+fn gt(args: Vec<Ast>) -> Option<Ast> {
+    args_are(args, |a, b| a > b)
+}
+
+fn gte(args: Vec<Ast>) -> Option<Ast> {
+    args_are(args, |a, b| a >= b)
 }

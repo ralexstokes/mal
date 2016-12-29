@@ -82,7 +82,7 @@ fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
                     let ops = ops.iter()
                         .map(|ast| eval(ast, env.clone()).unwrap())
                         .collect::<Vec<_>>();
-                    Some(f(ops.to_vec()))
+                    f(ops.to_vec())
                 }
                 _ => Some(op.clone()),
             }
