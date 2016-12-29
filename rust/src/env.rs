@@ -31,7 +31,7 @@ impl Env {
     }
 
     pub fn set(&mut self, key: String, val: Ast) {
-        self.bindings.insert(Ast::Symbol(key), val);
+        self.bindings.insert(key, val);
     }
 
     // pub fn find(self, key: &String) -> Option<Box<Env>> {
@@ -48,7 +48,7 @@ impl Env {
 
     pub fn get(&self, key: &String) -> Option<Ast> {
         self.bindings
-            .get(&Ast::Symbol(key.clone()))
+            .get(key)
             .and_then(|val| Some(val.clone()))
             .or_else(|| {
                 if let Some(ref env) = self.outer {
@@ -58,4 +58,19 @@ impl Env {
                 }
             })
     }
+}
+
+#[test]
+fn test_nesting() {
+    let one = Env::empty();
+    one.borrow_mut().set("a".to_string(), Ast::Symbol("a".to_string()));
+    let two = Env::empty_with(Some(one.clone()));
+    two.borrow_mut().set("b".to_string(), Ast::Symbol("b".to_string()));
+    assert_eq!(one.borrow().get(&"a".to_string()),
+               Some(Ast::Symbol("a".to_string())));
+    assert_eq!(one.borrow().get(&"b".to_string()), None);
+    assert_eq!(two.borrow().get(&"b".to_string()),
+               Some(Ast::Symbol("b".to_string())));
+    assert_eq!(two.borrow().get(&"a".to_string()),
+               Some(Ast::Symbol("a".to_string())));
 }

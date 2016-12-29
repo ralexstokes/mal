@@ -1,4 +1,7 @@
 use std::fmt;
+use std::rc::Rc;
+use std::cell::RefCell;
+use env::Env;
 
 #[derive(Debug,Clone)]
 pub enum Primitive {
@@ -10,7 +13,7 @@ pub enum Primitive {
 
 pub type HostFn = fn(Vec<Ast>) -> Option<Ast>;
 
-#[derive(Debug,Clone,PartialEq,Eq,Hash)]
+#[derive(Debug,Clone)]
 pub enum Ast {
     Nil,
     Boolean(bool),
@@ -23,7 +26,11 @@ pub enum Ast {
         alternative: Option<Box<Ast>>,
     },
     Do(Vec<Ast>),
-    Lambda { bindings: Vec<Ast>, body: Box<Ast> },
+    Lambda {
+        bindings: Vec<Ast>,
+        body: Box<Ast>,
+        env: Option<Rc<RefCell<Env>>>,
+    },
     Fn(HostFn),
     Define { name: String, val: Box<Ast> },
     Let { bindings: Vec<Ast>, body: Box<Ast> },

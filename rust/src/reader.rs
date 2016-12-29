@@ -204,7 +204,7 @@ fn parse_list(list: &Vec<Ast>) -> Option<Ast> {
                         IF_FORM => make_if(rest.to_vec()),
                         DEFINE_FORM => make_define(rest.to_vec()),
                         LET_FORM => make_let(rest.to_vec()),
-                        FN_FORM => make_fn(rest.to_vec()),
+                        FN_FORM => make_lambda(rest.to_vec()),
                         &_ => None,
                     }
                 }
@@ -265,13 +265,14 @@ fn make_let(args: Vec<Ast>) -> Option<Ast> {
     })
 }
 
-fn make_fn(args: Vec<Ast>) -> Option<Ast> {
+fn make_lambda(args: Vec<Ast>) -> Option<Ast> {
     args.split_first().and_then(|(first, rest)| {
         match *first {
             Ast::Combination(ref seq) => {
                 Some(Ast::Lambda {
                     bindings: seq.to_vec(),
-                    body: Box::new(Ast::Combination(rest.to_vec())),
+                    body: Box::new(Ast::Do(rest.to_vec())),
+                    env: None,
                 })
             }
             _ => None,

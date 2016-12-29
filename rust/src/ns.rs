@@ -16,21 +16,22 @@ pub fn new(bindings: Vec<(Ast, Ast)>) -> Ns {
 
 pub fn core() -> Ns {
     let mappings: Vec<(&'static str, HostFn)> = vec![("+", add),
-                                                     ("-", sub),
-                                                     ("*", mul),
-                                                     ("/", div),
-                                                     ("prn", prn),
-                                                     ("list", to_list),
-                                                     ("list?", is_list),
-                                                     ("empty?", is_empty),
-                                                     ("count", count_of),
-                                                     ("=", is_eq),
-                                                     ("<", lt),
-                                                     ("<=", lte),
-                                                     (">", gt),
-                                                     (">=", gte)];
+                                                     // ("-", sub),
+                                                     // ("*", mul),
+                                                     // ("/", div),
+                                                     // ("prn", prn),
+                                                     // ("list", to_list),
+                                                     // ("list?", is_list),
+                                                     // ("empty?", is_empty),
+                                                     // ("count", count_of),
+                                                     // ("=", is_eq),
+                                                     // ("<", lt),
+                                                     // ("<=", lte),
+                                                     // (">", gt),
+                                                     // (">=", gte)
+    ];
     let bindings = mappings.iter()
-        .map(|&(k, v)| (Ast::Symbol(k.to_string()), Ast::Fn(v)))
+        .map(|&(k, v)| (k.to_string(), Ast::Fn(v)))
         .collect();
     new(bindings)
 }
@@ -128,16 +129,30 @@ fn count_of(args: Vec<Ast>) -> Option<Ast> {
         .and_then(|a| {
             match a.clone() {
                 Ast::Combination(seq) => Ast::Number(seq.len() as i64).into(),
+                Ast::Nil => Ast::Number(0).into(),
                 _ => None,
             }
         })
 }
 fn is_eq(args: Vec<Ast>) -> Option<Ast> {
-    args.split_first()
-        .and_then(|(first, rest)| {
-            rest.split_first()
-                .and_then(|(second, _)| Ast::Boolean(first == second).into())
-        })
+    None
+    // use types::Ast::*;
+
+    // let pair = args.split_first()
+    //     .and_then(|(first, rest)| {
+    //         rest.split_first()
+    //             .and_then(|(second, _)| Some((first, second)))
+    //     });
+
+    // pair.and_then(|(first, second)| {
+    //     match (first, second) {
+
+    //     }
+    // })
+
+    // if let Some((first, second)) = pair {
+    //     Ast::Boolean(first == second).into()
+    // }
 }
 
 fn args_are<F>(args: Vec<Ast>, f: F) -> Option<Ast>

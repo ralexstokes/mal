@@ -75,8 +75,15 @@ fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
     pair.and_then(|(op, ops)| {
         eval(op, env.clone()).and_then(|op| {
             match op {
-                Ast::Lambda { ref bindings, ref body } => {
-                    eval_lambda(bindings.to_vec(), body.clone(), ops.to_vec(), env.clone())
+                Ast::Lambda { ref bindings, ref body, ref env } => {
+                    if let Some(e) = env.clone() {
+                        eval_lambda(bindings.to_vec(),
+                                    body.clone(),
+                                    eval_ops.to_vec(),
+                                    e.clone())
+                    } else {
+                        None
+                    }
                 }
                 Ast::Fn(f) => {
                     let ops = ops.iter()
