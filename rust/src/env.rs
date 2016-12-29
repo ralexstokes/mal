@@ -6,7 +6,7 @@ use ns;
 pub type Env = Rc<RefCell<EnvData>>;
 
 #[derive(Debug)]
-struct EnvData {
+pub struct EnvData {
     bindings: ns::Ns,
     outer: Option<Env>,
 }
