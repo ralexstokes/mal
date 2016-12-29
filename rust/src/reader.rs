@@ -223,10 +223,19 @@ fn string_from(token: &Token) -> Option<Ast> {
     let s = &token.value;
 
     if s.as_str().starts_with('"') {
-        Some(Ast::String(s.clone()))
+        Some(Ast::String(read_str(s.clone())))
     } else {
         None
     }
+}
+
+
+// When a string is read, the following transformations are applied:
+// a backslash followed by a doublequote is translated into a plain doublequote character
+// a backslash followed by "n" is translated into a newline
+// a backslash followed by another backslash is translated into a single backslash.
+fn read_str(s: String) -> String {
+    s
 }
 
 fn symbol_from(token: &Token) -> Option<Ast> {

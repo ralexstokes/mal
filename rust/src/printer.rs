@@ -1,23 +1,15 @@
 use types::Ast;
 
 pub fn print(ast: Ast) -> Option<String> {
-    match ast {
-        Ast::Nil => Some("nil".to_string()),
-        Ast::Boolean(b) => Some(b.to_string()),
-        Ast::String(s) => Some(s),
-        Ast::Number(n) => Some(n.to_string()),
-        Ast::Symbol(s) => Some(s),
-        Ast::List(seq) => {
-            let results = seq.into_iter()
-                .map(print)
-                .map(|node| node.unwrap())
-                .collect::<Vec<_>>()
-                .join(" ");
-            Some("(".to_string() + &results + ")")
-        }
-        Ast::Lambda { .. } => Some("#<fn>".to_string()),
-        Ast::Fn(_) => Some("#<primitive-fn>".to_string()),
-    }
+    pr_str(ast, true)
+}
+
+pub fn pr_str(ast: Ast, readably: bool) -> Option<String> {
+    format!("{}", ast).into()
+    // if readably {
+    // } else {
+    //     format!("{:?}", ast).into()
+    // }
 }
 
 #[cfg(test)]

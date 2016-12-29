@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use types::{Ast, HostFn};
-use printer::print;
+use printer;
 
 pub type Ns = HashMap<String, Ast>;
 
@@ -61,6 +61,9 @@ pub fn core() -> Ns {
                                                      ("*", mul),
                                                      ("/", div),
                                                      ("prn", prn),
+                                                     ("pr-str", print_to_str),
+                                                     ("str", to_str),
+                                                     ("println", println),
                                                      ("list", to_list),
                                                      ("list?", is_list),
                                                      ("empty?", is_empty),
@@ -131,12 +134,62 @@ fn div(xs: Vec<Ast>) -> Option<Ast> {
 }
 
 fn prn(args: Vec<Ast>) -> Option<Ast> {
-    args.first()
-        .and_then(|a| print(a.clone()))
-        .and_then(|s| {
-            println!("{}", s);
-            Ast::Nil.into()
-        })
+    let pargs = args.into_iter()
+        .map(printer::print)
+        .map(|p| p.unwrap())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    println!("{}", pargs);
+
+    Ast::Nil.into()
+}
+
+/*
+When a string is read, the following transformations are applied: a backslash followed by a doublequote is translated into a plain doublequote character, a backslash followed by "n" is translated into a newline, and a backslash followed by another backslash is translated into a single backslash.
+
+To properly print a string (for step 4 string functions), the pr_str function needs another parameter called print_readably. When print_readably is true, doublequotes, newlines, and backslashes are translated into their printed representations (the reverse of the reader). The PRINT function in the main program should call pr_str with print_readably set to true.
+*/
+
+fn print_to_str(args: Vec<Ast>) -> Option<Ast> {
+    let result = args.into_iter()
+        .map(|p| printer::print(p))
+        .map(|p| p.unwrap())
+        .collect::<Vec<_>>()
+        .join(" ");
+    Ast::String(format!("{:?}",result)).into()
+}
+
+// ("str", to_str),
+// str: calls pr_str on each argument with print_readably set to false, concatenates the results together ("" separator), and returns the new string.
+fn to_str(args: Vec<Ast>) -> Option<Ast> {
+    let result = args.iter()
+        .map(|p| printer::pr_str(p.clone(), false))
+        .map(|p| p.unwrap())
+        .collect::<Vec<_>>()
+        .join("");
+
+    if result.is_empty() {
+        Ast::String(format!("\"{:?}\"", "".to_string())).into()
+    } else {
+        Ast::String(format!("{}", result)).into()
+    }
+
+}
+
+// ("println", println),
+// println: calls pr_str on each argument with print_readably set to false, joins the results with " ", prints the string to the screen and then returns nil.
+fn println(args: Vec<Ast>) -> Option<Ast> {
+    let pargs = args.into_iter()
+        .map(|p| printer::pr_str(p, false))
+        .map(|p| p.unwrap())
+        .collect::<Vec<_>>();
+
+    for p in pargs {
+        println!("{}", p);
+    }
+
+    Ast::Nil.into()
 }
 
 fn to_list(args: Vec<Ast>) -> Option<Ast> {
