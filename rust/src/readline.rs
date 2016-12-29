@@ -22,6 +22,34 @@ impl DefaultReader {
         DefaultReader { prompt: prompt }
     }
 
+    pub fn write_ok(&self, msg: String) {
+        let mut t = term::stdout().unwrap();
+
+        t.fg(term::color::GREEN).unwrap();
+        t.attr(term::Attr::Bold).unwrap();
+        write!(t, "{}\n", msg).unwrap();
+
+        t.reset().unwrap();
+
+        io::stdout()
+            .flush()
+            .expect("could not flush line");
+    }
+
+    pub fn write_err(&self, msg: String) {
+        let mut t = term::stdout().unwrap();
+
+        t.fg(term::color::RED).unwrap();
+        t.attr(term::Attr::Bold).unwrap();
+        write!(t, "{}\n", msg).unwrap();
+
+        t.reset().unwrap();
+
+        io::stdout()
+            .flush()
+            .expect("could not flush line");
+    }
+
     pub fn read(&mut self) -> Option<String> {
         let mut t = term::stdout().unwrap();
 
