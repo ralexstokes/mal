@@ -16,20 +16,19 @@ pub fn new(bindings: Vec<(String, Ast)>) -> Ns {
 
 pub fn core() -> Ns {
     let mappings: Vec<(&'static str, HostFn)> = vec![("+", add),
-                                                     // ("-", sub),
-                                                     // ("*", mul),
-                                                     // ("/", div),
-                                                     // ("prn", prn),
-                                                     // ("list", to_list),
-                                                     // ("list?", is_list),
-                                                     // ("empty?", is_empty),
-                                                     // ("count", count_of),
-                                                     // ("=", is_eq),
-                                                     // ("<", lt),
-                                                     // ("<=", lte),
-                                                     // (">", gt),
-                                                     // (">=", gte)
-    ];
+                                                     ("-", sub),
+                                                     ("*", mul),
+                                                     ("/", div),
+                                                     ("prn", prn),
+                                                     ("list", to_list),
+                                                     ("list?", is_list),
+                                                     ("empty?", is_empty),
+                                                     ("count", count_of),
+                                                     ("=", is_equal),
+                                                     ("<", lt),
+                                                     ("<=", lte),
+                                                     (">", gt),
+                                                     (">=", gte)];
     let bindings = mappings.iter()
         .map(|&(k, v)| (k.to_string(), Ast::Fn(v)))
         .collect();
