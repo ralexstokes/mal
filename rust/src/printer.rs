@@ -7,27 +7,6 @@ pub fn print(ast: Ast) -> Option<String> {
         Ast::String(s) => Some(s),
         Ast::Number(n) => Some(n.to_string()),
         Ast::Symbol(s) => Some(s),
-        // Ast::If { predicate: p, consequent: c, alternative: a } => {
-        //     print(*p.clone())
-        //         .and_then(|s| {
-        //             print(*c.clone()).and_then(|t| {
-        //                 match a {
-        //                         Some(ref ast) => print(*ast.clone()),
-        //                         None => Some("".to_string()),
-        //                     }
-        //                     .map(|u| vec![s, t, u].join(" "))
-        //             })
-        //         })
-        //         .and_then(|s| Some("(if".to_string() + s.as_str() + ")"))
-        // }
-        // Ast::Do(d) => {
-        //     let results = d.into_iter()
-        //         .map(print)
-        //         .map(|node| node.unwrap())
-        //         .collect::<Vec<_>>()
-        //         .join(" ");
-        //     Some("(do ".to_string() + &results + " )")
-        // }
         Ast::List(seq) => {
             let results = seq.into_iter()
                 .map(print)
@@ -38,8 +17,6 @@ pub fn print(ast: Ast) -> Option<String> {
         }
         Ast::Lambda { .. } => Some("#<fn>".to_string()),
         Ast::Fn(_) => Some("#<primitive-fn>".to_string()),
-        // Ast::Define { .. } => Some("def!".to_string()),
-        // Ast::Let { .. } => Some("let*".to_string()),
     }
 }
 
