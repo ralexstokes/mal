@@ -11,7 +11,7 @@ pub fn eval(ast: &Ast, env: Env) -> Option<Ast> {
 }
 
 const IF_FORM: &'static str = "if";
-const DO_FORM: &'static str = "do";
+const SEQUENCE_FORM: &'static str = "do";
 const DEFINE_FORM: &'static str = "def!";
 const LET_FORM: &'static str = "let*";
 const LAMBDA_FORM: &'static str = "fn*";
@@ -27,7 +27,7 @@ fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
                 &Ast::Symbol(ref s) => {
                     match s.as_str() {
                         IF_FORM => eval_if(operands.to_vec(), env),
-                        DO_FORM => eval_do(operands.to_vec(), env),
+                        SEQUENCE_FORM => eval_sequence(operands.to_vec(), env),
                         DEFINE_FORM => eval_define(operands.to_vec(), env),
                         LET_FORM => eval_let(operands.to_vec(), env),
                         LAMBDA_FORM => eval_lambda(operands.to_vec(), env),
@@ -69,7 +69,7 @@ fn apply(operator: &Ast, operands: Vec<Ast>, env: Env) -> Option<Ast> {
     })
 }
 
-fn eval_do(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+fn eval_sequence(seq: Vec<Ast>, env: Env) -> Option<Ast> {
     seq.iter()
         .map(|s| eval(&s, env.clone()))
         .last()
