@@ -44,8 +44,8 @@ fn typ_for(c: &str) -> TokenType {
     }
 
     match c {
-        "(" => TokenType::OpenList,
-        ")" => TokenType::CloseList,
+        "(" | "[" => TokenType::OpenList,
+        ")" | "]" => TokenType::CloseList,
         _ => TokenType::Atom,
     }
 }
@@ -271,8 +271,7 @@ fn make_fn(args: Vec<Ast>) -> Option<Ast> {
             Ast::Combination(ref seq) => {
                 Some(Ast::Lambda {
                     bindings: seq.to_vec(),
-                    body: rest.to_vec(),
-                    env: Env::empty(),
+                    body: Box::new(Ast::Combination(rest.to_vec())),
                 })
             }
             _ => None,

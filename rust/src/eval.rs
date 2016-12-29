@@ -18,18 +18,11 @@ pub fn eval(ast: &Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
             }
         }
         &Ast::Do(ref seq) => eval_do(seq.to_vec(), env),
-        &Ast::Lambda{..} => Some(ast.clone()),
+        &Ast::Lambda { .. } => Some(ast.clone()),
         &Ast::Fn(_) => Some(ast.clone()),
-        &Ast::Define {
-            name: ref n,
-            val: ref v,
-        } => eval_define(n.clone(), *v.clone(), env),
-        &Ast::Let {
-            bindings: ref bs,
-            ref body,
-        } => eval_let(bs.to_vec(), *body.clone(), env),
+        &Ast::Define { name: ref n, val: ref v } => eval_define(n.clone(), *v.clone(), env),
+        &Ast::Let { ref bindings, ref body } => eval_let(bindings.to_vec(), *body.clone(), env),
         &Ast::Combination(ref seq) => eval_combination(seq.to_vec(), env),
-        &Ast::Operator(_) => unreachable!(),
     }
 }
 
@@ -60,31 +53,16 @@ fn eval_if(predicate: Ast,
     })
 }
 
-fn eval_lambda(bindings: Vec<Ast>, exprs: Vec<Ast>, args: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
-    None
-    // let binds = bindings.iter()
-    //     .map(|b| {
-    //         match b {
-    //             &Ast::Symbol(ref s) => s.as_str(),
-    //             _ => unreachable!(),
-    //         }
-    //     })
-    //     .collect::<Vec<_>>();
-    // let body = |args| {
-    //     let env = Env::new(Some(env), binds, exprs);
-    //     eval(&args, env);
-    // };
-    // body(Ast::Nil)
-    /*
-    fn*: Return a new function closure. The body of that closure does the following:
-    Create a new environment using env (closed over from outer scope) as the outer parameter, the first parameter (second list element of ast from the outer scope) as the binds parameter, and the parameters to the closure as the exprs parameter.
+fn eval_lambda(params: Vec<Ast>,
+               exprs: Box<Ast>,
+               args: Vec<Ast>,
+               env: Rc<RefCell<Env>>)
+               -> Option<Ast> {
+    let bindings = params.into_iter().zip(args.into_iter()).collect();
+    let ns = ns::new(bindings);
+    let new_env = Env::new(Some(env), ns);
 
-        Call EVAL on the second parameter (third list element of ast from outer scope), using the new environment. Use the result as the return value of the closure.
-
-    // ( (fn* (a b) (+ b a)) 3 4)
-    */
-    // let mut new_env = env;
-    // eval(&Ast::Nil, new_env)
+    eval(&exprs, new_env)
 }
 
 fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
@@ -95,23 +73,21 @@ fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
     }
 
     pair.and_then(|(op, ops)| {
-            eval(op, env.clone()).and_then(|op| {
-                match op {
-                    Ast::Lambda {
-                        bindings: ref bs,
-                        body: ref exprs,
-                        env: ref env,
-                    } => return eval_lambda(bs.to_vec(), exprs.to_vec(), ops.to_vec(), env.clone()),
-                    Ast::Fn(f) => {
-                        let ops = ops.iter()
-                            .map(|ast| eval(ast, env.clone()).unwrap())
-                            .collect::<Vec<_>>();
-                        Some(f(ops.to_vec()))
-                    }
-                    _ => unreachable!(),
+        eval(op, env.clone()).and_then(|op| {
+            match op {
+                Ast::Lambda { ref bindings, ref body } => {
+                    eval_lambda(bindings.to_vec(), body.clone(), ops.to_vec(), env.clone())
                 }
-            })
+                Ast::Fn(f) => {
+                    let ops = ops.iter()
+                        .map(|ast| eval(ast, env.clone()).unwrap())
+                        .collect::<Vec<_>>();
+                    Some(f(ops.to_vec()))
+                }
+                _ => Some(op.clone()),
+            }
         })
+    })
 }
 
 fn eval_define(n: String, val: Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {

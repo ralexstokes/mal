@@ -1,7 +1,4 @@
 use std::fmt;
-use env::Env;
-use std::rc::Rc;
-use std::cell::RefCell;
 
 #[derive(Debug,Clone)]
 pub enum Primitive {
@@ -24,16 +21,11 @@ pub enum Ast {
         alternative: Option<Box<Ast>>,
     },
     Do(Vec<Ast>),
-    Lambda {
-        bindings: Vec<Ast>,
-        body: Vec<Ast>,
-        env: Rc<RefCell<Env>>,
-    },
+    Lambda { bindings: Vec<Ast>, body: Box<Ast> },
     Fn(fn(Vec<Ast>) -> Ast),
     Define { name: String, val: Box<Ast> },
     Let { bindings: Vec<Ast>, body: Box<Ast> },
     Combination(Vec<Ast>),
-    Operator(Primitive),
 }
 
 // Pretty printer for debug
@@ -59,9 +51,8 @@ impl fmt::Display for Ast {
             Ast::Lambda { .. } => write!(f, "#<fn>"),
             Ast::Fn(_) => write!(f, "#<primitive-fn>"),
             Ast::Define { name: ref n, val: ref v } => write!(f, "Define({},{})", n, *v),
-            Ast::Let { bindings: ref bs, body: ref body } => write!(f, "Let({:?},{:?})", bs, body),
+            Ast::Let { bindings: ref bs, ref body } => write!(f, "Let({:?},{:?})", bs, body),
             Ast::Combination(ref seq) => pretty_print_list(f, seq, 0),
-            Ast::Operator(_) => unreachable!(),
         }
     }
 }

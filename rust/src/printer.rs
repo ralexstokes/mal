@@ -38,9 +38,8 @@ pub fn print(ast: Ast) -> Option<String> {
         }
         Ast::Lambda { .. } => Some("#<fn>".to_string()),
         Ast::Fn(_) => Some("#<primitive-fn>".to_string()),
-        Ast::Define { name: ref n, val: ref v } => Some("(def! ".to_string()),
-        Ast::Let { bindings: ref bs, body: ref body } => Some("(let* ".to_string()),
-        Ast::Operator(_) => unreachable!(),
+        Ast::Define { .. } => Some("def!".to_string()),
+        Ast::Let { .. } => Some("let*".to_string()),
     }
 }
 
