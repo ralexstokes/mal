@@ -29,7 +29,7 @@ pub enum Ast {
     Lambda {
         bindings: Vec<Ast>,
         body: Box<Ast>,
-        env: Option<Rc<RefCell<Env>>>,
+        env: Env,
     },
     Fn(HostFn),
     Define { name: String, val: Box<Ast> },

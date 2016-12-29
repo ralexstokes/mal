@@ -2,9 +2,9 @@ use types::Ast;
 use ns;
 use std::rc::Rc;
 use std::cell::RefCell;
-use env::Env;
+use env::{Env, empty_with, new};
 
-pub fn eval(ast: &Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
+pub fn eval(ast: &Ast, env: Env) -> Option<Ast> {
     match ast {
         &Ast::Nil => Some(ast.clone()),
         &Ast::Boolean(_) => Some(ast.clone()),
@@ -26,18 +26,14 @@ pub fn eval(ast: &Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
     }
 }
 
-fn eval_do(seq: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
+fn eval_do(seq: Vec<Ast>, env: Env) -> Option<Ast> {
     seq.iter()
         .map(|s| eval(&s, env.clone()))
         .last()
         .unwrap_or(None)
 }
 
-fn eval_if(predicate: Ast,
-           consequent: Ast,
-           alternative: Option<Ast>,
-           env: Rc<RefCell<Env>>)
-           -> Option<Ast> {
+fn eval_if(predicate: Ast, consequent: Ast, alternative: Option<Ast>, env: Env) -> Option<Ast> {
     eval(&predicate, env.clone()).and_then(|p| {
         match p {
             Ast::Nil |
@@ -53,11 +49,7 @@ fn eval_if(predicate: Ast,
     })
 }
 
-fn eval_lambda(params: Vec<Ast>,
-               exprs: Box<Ast>,
-               args: Vec<Ast>,
-               env: Rc<RefCell<Env>>)
-               -> Option<Ast> {
+fn eval_lambda(params: Vec<Ast>, exprs: Box<Ast>, args: Vec<Ast>, env: Env) -> Option<Ast> {
     let bindings = params.into_iter()
         .map(|p| {
             match p {
@@ -68,12 +60,12 @@ fn eval_lambda(params: Vec<Ast>,
         .zip(args.into_iter())
         .collect();
     let ns = ns::new(bindings);
-    let new_env = Env::new(Some(env), ns);
+    let new_env = new(Some(env), ns);
 
     eval(&exprs, new_env)
 }
 
-fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
+fn eval_combination(app: Vec<Ast>, env: Env) -> Option<Ast> {
     let pair = app.split_first();
 
     if pair.is_none() {
@@ -97,14 +89,10 @@ fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
         eval(op, env.clone()).and_then(|op| {
             match op {
                 Ast::Lambda { ref bindings, ref body, ref env } => {
-                    if let Some(e) = env.clone() {
-                        eval_lambda(bindings.to_vec(),
-                                    body.clone(),
-                                    eval_ops.to_vec(),
-                                    e.clone())
-                    } else {
-                        None
-                    }
+                    eval_lambda(bindings.to_vec(),
+                                body.clone(),
+                                eval_ops.to_vec(),
+                                env.clone())
                 }
                 Ast::Fn(f) => f(eval_ops.to_vec()),
                 _ => Some(op.clone()),
@@ -113,21 +101,21 @@ fn eval_combination(app: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Ast> {
     })
 }
 
-fn eval_define(n: String, val: Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
+fn eval_define(n: String, val: Ast, env: Env) -> Option<Ast> {
     eval(&val, env.clone()).and_then(|val| {
         env.borrow_mut().set(n, val.clone());
         Some(val)
     })
 }
 
-fn eval_let(bindings: Vec<Ast>, body: Ast, env: Rc<RefCell<Env>>) -> Option<Ast> {
+fn eval_let(bindings: Vec<Ast>, body: Ast, env: Env) -> Option<Ast> {
     build_let_env(bindings, env).and_then(|env| eval(&body, env))
 }
 
 const PAIR_CHUNK_SIZE: usize = 2;
 
-fn build_let_env(bindings: Vec<Ast>, env: Rc<RefCell<Env>>) -> Option<Rc<RefCell<Env>>> {
-    let env = Env::empty_with(Some(env));
+fn build_let_env(bindings: Vec<Ast>, env: Env) -> Option<Env> {
+    let env = empty_with(Some(env));
     for pair in bindings.chunks(PAIR_CHUNK_SIZE) {
         if pair.len() != PAIR_CHUNK_SIZE {
             break;

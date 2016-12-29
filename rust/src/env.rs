@@ -3,33 +3,35 @@ use std::cell::RefCell;
 use types::Ast;
 use ns;
 
+pub type Env = Rc<RefCell<EnvData>>;
+
 #[derive(Debug)]
-pub struct Env {
+struct EnvData {
     bindings: ns::Ns,
-    outer: Option<Rc<RefCell<Env>>>,
+    outer: Option<Env>,
 }
 
-impl Env {
-    pub fn new(outer: Option<Rc<RefCell<Env>>>, ns: ns::Ns) -> Rc<RefCell<Env>> {
-        Rc::new(RefCell::new(Env {
-            bindings: ns,
-            outer: outer,
-        }))
-    }
+pub fn new(outer: Option<Env>, ns: ns::Ns) -> Env {
+    Rc::new(RefCell::new(EnvData {
+        bindings: ns,
+        outer: outer,
+    }))
+}
 
-    pub fn core() -> Rc<RefCell<Env>> {
-        let ns = ns::core();
-        Self::new(None, ns)
-    }
+pub fn core() -> Env {
+    let ns = ns::core();
+    new(None, ns)
+}
 
-    pub fn empty() -> Rc<RefCell<Env>> {
-        Self::empty_with(None)
-    }
+pub fn empty() -> Env {
+    empty_with(None)
+}
 
-    pub fn empty_with(outer: Option<Rc<RefCell<Env>>>) -> Rc<RefCell<Env>> {
-        Self::new(outer, ns::Ns::new())
-    }
+pub fn empty_with(outer: Option<Env>) -> Env {
+    new(outer, ns::Ns::new())
+}
 
+impl EnvData {
     pub fn set(&mut self, key: String, val: Ast) {
         self.bindings.insert(key, val);
     }
@@ -50,9 +52,9 @@ impl Env {
 
 #[test]
 fn test_nesting() {
-    let one = Env::empty();
+    let one = empty();
     one.borrow_mut().set("a".to_string(), Ast::Symbol("a".to_string()));
-    let two = Env::empty_with(Some(one.clone()));
+    let two = empty_with(Some(one.clone()));
     two.borrow_mut().set("b".to_string(), Ast::Symbol("b".to_string()));
     assert_eq!(one.borrow().get(&"a".to_string()),
                Some(Ast::Symbol("a".to_string())));
