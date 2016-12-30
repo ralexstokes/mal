@@ -1,4 +1,5 @@
 use std::fmt;
+use printer;
 use env::Env;
 
 pub type HostFn = fn(Vec<Ast>) -> Option<Ast>;
@@ -21,21 +22,8 @@ pub enum Ast {
 
 impl fmt::Display for Ast {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Ast::Nil => write!(f, "nil"),
-            &Ast::Boolean(b) => write!(f, "{}", b),
-            &Ast::String(ref s) => write!(f, "{}", s.clone()),
-            &Ast::Number(n) => write!(f, "{}", n),
-            &Ast::Symbol(ref s) => write!(f, "{}", s.clone()),
-            &Ast::List(ref seq) => {
-                let results = seq.into_iter()
-                    .map(|node| format!("{}", node.clone()))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                write!(f, "({})", results)
-            }
-            &Ast::Lambda { .. } => write!(f, "#<fn>"),
-            &Ast::Fn(_) => write!(f, "#<host-fn>"),
-        }
+        write!(f,
+               "{}",
+               printer::print(self.clone()).unwrap_or("error".to_string()))
     }
 }

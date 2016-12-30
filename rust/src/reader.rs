@@ -222,20 +222,28 @@ fn number_from(token: &Token) -> Option<Ast> {
 fn string_from(token: &Token) -> Option<Ast> {
     let s = &token.value;
 
-    if s.as_str().starts_with('"') {
-        Some(Ast::String(read_str(s.clone())))
+    lazy_static! {
+        static ref STRING: Regex = Regex::new(r#"^".*"$"#).unwrap();
+    }
+
+    if STRING.is_match(s) {
+        let new_str = &s[1..s.len() - 1];
+        Some(Ast::String(read_str(new_str)))
     } else {
         None
     }
 }
 
 
+// NOTE: mal specifies the following:
 // When a string is read, the following transformations are applied:
 // a backslash followed by a doublequote is translated into a plain doublequote character
 // a backslash followed by "n" is translated into a newline
 // a backslash followed by another backslash is translated into a single backslash.
-fn read_str(s: String) -> String {
-    s
+fn read_str(s: &str) -> String {
+    s.replace(r#"\""#, "\"")
+        .replace(r#"\n"#, "\n")
+        .replace(r#"\\"#, "\\")
 }
 
 fn symbol_from(token: &Token) -> Option<Ast> {
