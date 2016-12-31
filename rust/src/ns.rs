@@ -207,6 +207,7 @@ fn count_of(args: Vec<Ast>) -> Option<Ast> {
             }
         })
 }
+
 fn is_equal(args: Vec<Ast>) -> Option<Ast> {
     args.split_first()
         .and_then(|(first, rest)| {
@@ -260,17 +261,21 @@ fn args_are<F>(args: Vec<Ast>, f: F) -> Option<Ast>
         })
 }
 
+
 fn lt(args: Vec<Ast>) -> Option<Ast> {
     args_are(args, |a, b| a < b)
 }
+
 
 fn lte(args: Vec<Ast>) -> Option<Ast> {
     args_are(args, |a, b| a <= b)
 }
 
+
 fn gt(args: Vec<Ast>) -> Option<Ast> {
     args_are(args, |a, b| a > b)
 }
+
 
 fn gte(args: Vec<Ast>) -> Option<Ast> {
     args_are(args, |a, b| a >= b)
