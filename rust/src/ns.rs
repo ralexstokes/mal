@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use types::{Ast, HostFn};
 use printer;
+use reader;
+use std::io::Read;
+use std::fs::File;
 
 pub type Ns = HashMap<String, Ast>;
 
@@ -271,4 +274,40 @@ fn gt(args: Vec<Ast>) -> Option<Ast> {
 
 fn gte(args: Vec<Ast>) -> Option<Ast> {
     args_are(args, |a, b| a >= b)
+}
+
+
+fn read_string(args: Vec<Ast>) -> Option<Ast> {
+    args.first()
+        .and_then(|arg| {
+            match *arg {
+                Ast::String(ref s) => {
+                    reader::read(s.clone())
+                },
+                _ => None
+            }
+        })
+}
+
+fn slurp(args: Vec<Ast>) -> Option<Ast> {
+    args.first()
+        .and_then(|arg| {
+            match *arg {
+                Ast::String(ref filename) => {
+                    let mut buffer = String::new();
+                    let result = File::open(filename)
+                        .and_then(|mut f| {
+                            f.read_to_string(&mut buffer)
+                        });
+                    match result {
+                        Ok(_) => Some(Ast::String(buffer)),
+                        Err(e) => {
+                            println!("{}", e);
+                            None
+                        }
+                    }
+                },
+                _ => None
+            }
+        })
 }
