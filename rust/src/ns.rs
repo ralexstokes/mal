@@ -75,7 +75,10 @@ pub fn core() -> Ns {
                                                      ("<", lt),
                                                      ("<=", lte),
                                                      (">", gt),
-                                                     (">=", gte)];
+                                                     (">=", gte),
+                                                     ("read-string", read_string),
+                                                     ("slurp", slurp),
+    ];
     let bindings = mappings.iter()
         .map(|&(k, v)| (k.to_string(), Ast::Fn(v)))
         .collect();
