@@ -15,7 +15,7 @@ run:
 	cargo run --bin main
 
 readline:
-	cargo build --features "readline"
+	cargo run --features "readline" --bin main
 
 release:
 	cargo build --release
