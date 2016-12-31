@@ -17,7 +17,7 @@ const LET_FORM: &'static str = "let*";
 const LAMBDA_FORM: &'static str = "fn*";
 
 fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
-    if seq.len() == 0 {
+    if seq.is_empty() {
         return Some(Ast::List(seq));
     }
 
