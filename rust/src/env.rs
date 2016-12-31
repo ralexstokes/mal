@@ -48,6 +48,26 @@ impl EnvData {
                 }
             })
     }
+
+    pub fn inspect(&self) {
+        for (k, v) in self.bindings.iter() {
+            println!("{} => {}", k, v);
+        }
+
+        while let Some(ref outer) = self.outer {
+            for (k, v) in outer.borrow().bindings.iter() {
+                println!("{} => {}", k, v);
+            }
+        }
+    }
+}
+
+pub fn root(env: &Env) -> Env {
+    if let Some(ref outer) = env.borrow().outer {
+        root(outer)
+    } else {
+        env.clone()
+    }
 }
 
 #[test]

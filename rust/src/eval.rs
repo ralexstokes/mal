@@ -1,6 +1,6 @@
 use types::Ast;
 use ns;
-use env::{Env, empty_from, new};
+use env::{Env, empty_from, new, root};
 
 pub fn eval(ast: &Ast, env: Env) -> Option<Ast> {
     match ast {
@@ -15,6 +15,8 @@ const SEQUENCE_FORM: &'static str = "do";
 const DEFINE_FORM: &'static str = "def!";
 const LET_FORM: &'static str = "let*";
 const LAMBDA_FORM: &'static str = "fn*";
+const EVAL_FORM: &'static str = "eval";
+const ENV_FORM: &'static str = "env";
 
 fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
     if seq.is_empty() {
@@ -31,22 +33,26 @@ fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
                         DEFINE_FORM => eval_define(operands.to_vec(), env),
                         LET_FORM => eval_let(operands.to_vec(), env),
                         LAMBDA_FORM => eval_lambda(operands.to_vec(), env),
-                        _ => apply(operator, operands.to_vec(), env),
+                        EVAL_FORM => eval_eval(eval_ops(operands.to_vec(), env.clone()), env),
+                        ENV_FORM => eval_env(env),
+                        _ => apply(operator, eval_ops(operands.to_vec(), env.clone()), env),
                     }
                 }
-                _ => apply(operator, operands.to_vec(), env),
+                _ => apply(operator, eval_ops(operands.to_vec(), env.clone()), env),
             }
         })
 }
 
-fn apply(operator: &Ast, operands: Vec<Ast>, env: Env) -> Option<Ast> {
-    let evops = operands.iter()
+fn eval_ops(operands: Vec<Ast>, env: Env) -> Vec<Ast> {
+    operands.iter()
         .map(|operand| eval(operand, env.clone()))
         .filter(|operand| operand.is_some())
         .map(|operand| operand.unwrap())
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+}
 
-    eval(operator, env).and_then(|evop| {
+fn apply(operator: &Ast, evops: Vec<Ast>, env: Env) -> Option<Ast> {
+    eval(operator, env.clone()).and_then(|evop| {
         match evop {
             Ast::Lambda { params, body, env } => {
                 let ns = ns::new_from(params, evops);
@@ -163,4 +169,21 @@ fn eval_lambda(seq: Vec<Ast>, env: Env) -> Option<Ast> {
             env: env,
         }
         .into()
+}
+
+// guest eval
+fn eval_eval(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+    // grab reference to root env in case we are
+    // `eval`ing inside a temporary env (e.g. lambda, let)
+    let root_env = root(&env);
+
+    seq.first()
+        .and_then(|arg| eval(arg, root_env.clone()))
+}
+
+
+// for debugging
+fn eval_env(env: Env) -> Option<Ast> {
+    env.borrow().inspect();
+    Ast::Nil.into()
 }
