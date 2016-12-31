@@ -55,7 +55,7 @@ fn apply(operator: &Ast, operands: Vec<Ast>, env: Env) -> Option<Ast> {
                 eval_sequence(body, new_env)
             }
             Ast::Fn(f) => f(evops.to_vec()),
-            _ => Some(evop.clone()),
+            _ => unreachable!(),
         }
     })
 }
