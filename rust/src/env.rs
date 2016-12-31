@@ -54,7 +54,7 @@ impl EnvData {
 fn test_nesting() {
     let one = empty();
     one.borrow_mut().set("a".to_string(), Ast::Symbol("a".to_string()));
-    let two = empty_with(Some(one.clone()));
+    let two = empty_from(one.clone());
     two.borrow_mut().set("b".to_string(), Ast::Symbol("b".to_string()));
     assert_eq!(one.borrow().get(&"a".to_string()),
                Some(Ast::Symbol("a".to_string())));
