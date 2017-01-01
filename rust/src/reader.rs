@@ -121,7 +121,7 @@ impl Reader {
 
 #[test]
 fn test_reader() {
-    let inputstr = "(+ 1 (* 1 1 1) (- 3 2 1))";
+    let inputstr = "(+ 1 (* 1 1 1) (- 3 2 1)) ;; abc \n (+ 1 2)";
     let tokens = tokenizer(inputstr.to_string());
     let reader = Reader::new(tokens);
     println!("{}", inputstr);
@@ -132,7 +132,18 @@ fn test_reader() {
 
 #[test]
 fn test_read_form() {
-    let inputstr = "(+ 1 2 (* 1 1 1) (- 3 2 1))";
+    // let inputstr = "(+ 1 2 (* 1 1 1) (- 3 2 1) ;; abc \n (+ 1 2))";
+    let inputstr = r#"(do ;; A comment in a file
+(def! inc4 (fn* (a) (+ 4 a)))
+(def! inc5 (fn* (a)  ;; a comment after code
+  (+ 5 a)))
+
+(prn "incB.mal finished")
+"incB.mal return string"
+
+;; ending comment
+
+)"#;
     let tokens = tokenizer(inputstr.to_string());
     let mut reader = Reader::new(tokens);
     let ast = read_form(&mut reader).unwrap();
@@ -153,8 +164,10 @@ fn read_form(reader: &mut Reader) -> Option<Ast> {
                 result = read_list(reader);
                 break;
             }
-            TokenType::CloseList => continue,
-            TokenType::Comment => break,
+            TokenType::CloseList => break,
+            TokenType::Comment => {
+                let _ = reader.next();
+            }
         }
     }
     result
