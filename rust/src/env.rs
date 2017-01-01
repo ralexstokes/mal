@@ -76,11 +76,39 @@ fn test_nesting() {
     one.borrow_mut().set("a".to_string(), Ast::Symbol("a".to_string()));
     let two = empty_from(one.clone());
     two.borrow_mut().set("b".to_string(), Ast::Symbol("b".to_string()));
-    assert_eq!(one.borrow().get(&"a".to_string()),
-               Some(Ast::Symbol("a".to_string())));
-    assert_eq!(one.borrow().get(&"b".to_string()), None);
-    assert_eq!(two.borrow().get(&"b".to_string()),
-               Some(Ast::Symbol("b".to_string())));
-    assert_eq!(two.borrow().get(&"a".to_string()),
-               Some(Ast::Symbol("a".to_string())));
+
+    let onea = one.borrow().get(&"a".to_string());
+    match onea {
+        Some(x) => {
+            match x {
+                Ast::Symbol(ref s) => assert!(s.as_str() == "a"),
+                _ => panic!("wrong ast type"),
+            }
+        }
+        None => panic!("missing binding"),
+    }
+
+    let oneb = one.borrow().get(&"b".to_string());
+    assert!(oneb.is_none());
+
+    let twob = two.borrow().get(&"b".to_string());
+    match twob {
+        Some(x) => {
+            match x {
+                Ast::Symbol(ref s) => assert!(s.as_str() == "b"),
+                _ => panic!("wrong ast type"),
+            }
+        }
+        None => panic!("missing binding"),
+    }
+    let twoa = two.borrow().get(&"a".to_string());
+    match twoa {
+        Some(x) => {
+            match x {
+                Ast::Symbol(ref s) => assert!(s.as_str() == "a"),
+                _ => panic!("wrong ast type"),
+            }
+        }
+        None => panic!("missing binding"),
+    }
 }
