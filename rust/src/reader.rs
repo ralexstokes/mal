@@ -46,16 +46,23 @@ fn typ_for(c: &str) -> TokenType {
     match c {
         "(" | "[" => TokenType::OpenList,
         ")" | "]" => TokenType::CloseList,
+        "@" => TokenType::Sigil(SigilType::AtomDeref),
         _ => TokenType::Atom,
     }
 }
 
 #[derive(Debug,Clone)]
-pub enum TokenType {
+enum TokenType {
     OpenList,
     CloseList,
     Atom,
     Comment,
+    Sigil(SigilType),
+}
+
+#[derive(Debug,Clone)]
+enum SigilType {
+    AtomDeref,
 }
 
 
@@ -167,6 +174,18 @@ fn read_form(reader: &mut Reader) -> Option<Ast> {
             TokenType::CloseList => break, // Err(::UnexpectedInput)
             TokenType::Comment => {
                 let _ = reader.next();
+            }
+            TokenType::Sigil(sigil) => {
+                let _ = reader.next();
+                result = match sigil {
+                    SigilType::AtomDeref => {
+                        read_form(reader).and_then(|next| {
+                            let elems = vec![Ast::Symbol("deref".to_string()), next];
+                            Ast::List(elems).into()
+                        })
+                    }
+                };
+                break;
             }
         }
     }
