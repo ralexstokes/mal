@@ -43,7 +43,7 @@ fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
         })
 }
 
-fn eval_ops(operands: Vec<Ast>, env: Env) -> Vec<Ast> {
+pub fn eval_ops(operands: Vec<Ast>, env: Env) -> Vec<Ast> {
     operands.iter()
         .map(|operand| eval(operand, env.clone()))
         .filter(|operand| operand.is_some())
@@ -51,7 +51,7 @@ fn eval_ops(operands: Vec<Ast>, env: Env) -> Vec<Ast> {
         .collect::<Vec<_>>()
 }
 
-fn apply(operator: &Ast, evops: Vec<Ast>, env: Env) -> Option<Ast> {
+pub fn apply(operator: &Ast, evops: Vec<Ast>, env: Env) -> Option<Ast> {
     eval(operator, env.clone()).and_then(|evop| {
         match evop {
             Ast::Lambda { params, body, env } => {

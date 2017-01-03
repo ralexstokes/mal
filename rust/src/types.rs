@@ -1,4 +1,6 @@
 use std::fmt;
+use std::cell::RefCell;
+// use std::rc::Rc;
 use printer;
 use env::Env;
 
@@ -18,6 +20,7 @@ pub enum Ast {
     },
     Fn(HostFn),
     List(Vec<Ast>),
+    Atom(RefCell<Box<Ast>>),
 }
 
 impl fmt::Display for Ast {

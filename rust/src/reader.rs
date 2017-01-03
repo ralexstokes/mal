@@ -164,7 +164,7 @@ fn read_form(reader: &mut Reader) -> Option<Ast> {
                 result = read_list(reader);
                 break;
             }
-            TokenType::CloseList => break,
+            TokenType::CloseList => break, // Err(::UnexpectedInput)
             TokenType::Comment => {
                 let _ = reader.next();
             }

@@ -28,6 +28,10 @@ pub fn pr_str(ast: Ast, readably: bool) -> Option<String> {
         }
         Ast::Lambda { .. } => Some("#<fn>".to_string()),
         Ast::Fn(_) => Some("#<host-fn>".to_string()),
+        Ast::Atom(atom) => {
+            let inner = atom.borrow();
+            Some(format!("atom({})", inner.clone()))
+        }
     }
 }
 
