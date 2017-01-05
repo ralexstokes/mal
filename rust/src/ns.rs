@@ -78,6 +78,8 @@ pub fn core() -> Ns {
                                                      (">=", gte),
                                                      ("read-string", read_string),
                                                      ("slurp", slurp),
+                                                     ("cons", cons),
+                                                     ("concat", concat),
     ];
     let bindings = mappings.iter()
         .map(|&(k, v)| (k.to_string(), Ast::Fn(v)))
@@ -318,4 +320,43 @@ fn slurp(args: Vec<Ast>) -> Option<Ast> {
                 _ => None
             }
         })
+}
+// cons: this function takes a list as its second parameter and returns a new list that has the first argument prepended to it.
+fn cons(args: Vec<Ast>) -> Option<Ast> {
+    args.split_first()
+        .and_then(|(elem, rest)| {
+            rest.split_first()
+                .and_then(|(list, _)| {
+                    let mut elems = vec![elem.clone()];
+                    match *list {
+                        Ast::List(ref seq) => {
+                            for s in seq {
+                                elems.push(s.clone())
+                            }
+
+                            Ast::List(elems).into()
+                        },
+                        _ => None
+                    }
+                })
+        })
+}
+
+// concat: this functions takes 0 or more lists as parameters and returns a new list that is a concatenation of all the list parameters.
+// (concat as bs cs)
+fn concat(args: Vec<Ast>) -> Option<Ast> {
+    let mut result: Vec<Ast> = vec![];
+
+    for arg in args {
+        match arg {
+            Ast::List(ref seq) => {
+                for s in seq {
+                    result.push(s.clone());
+                }
+            },
+            _ => return None
+        }
+    }
+
+    Ast::List(result).into()
 }
