@@ -17,6 +17,7 @@ const LET_FORM: &'static str = "let*";
 const LAMBDA_FORM: &'static str = "fn*";
 const EVAL_FORM: &'static str = "eval";
 const ENV_FORM: &'static str = "env";
+const QUOTE_FORM: &'static str = "quote";
 
 fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
     if seq.is_empty() {
@@ -35,6 +36,7 @@ fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
                         LAMBDA_FORM => eval_lambda(operands.to_vec(), env),
                         EVAL_FORM => eval_eval(eval_ops(operands.to_vec(), env.clone()), env),
                         ENV_FORM => eval_env(env),
+                        QUOTE_FORM => eval_quote(operands.to_vec()),
                         _ => apply(operator, eval_ops(operands.to_vec(), env.clone()), env),
                     }
                 }
@@ -186,4 +188,10 @@ fn eval_eval(seq: Vec<Ast>, env: Env) -> Option<Ast> {
 fn eval_env(env: Env) -> Option<Ast> {
     env.borrow().inspect();
     Ast::Nil.into()
+}
+
+
+fn eval_quote(seq: Vec<Ast>) -> Option<Ast> {
+    seq.first()
+        .and_then(|quoted| quoted.clone().into())
 }
