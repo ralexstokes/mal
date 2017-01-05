@@ -343,7 +343,6 @@ fn cons(args: Vec<Ast>) -> Option<Ast> {
 }
 
 // concat: this functions takes 0 or more lists as parameters and returns a new list that is a concatenation of all the list parameters.
-// (concat as bs cs)
 fn concat(args: Vec<Ast>) -> Option<Ast> {
     let mut result: Vec<Ast> = vec![];
 

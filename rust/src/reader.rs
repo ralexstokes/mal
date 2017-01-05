@@ -132,7 +132,6 @@ fn test_reader() {
 
 #[test]
 fn test_read_form() {
-    // let inputstr = "(+ 1 2 (* 1 1 1) (- 3 2 1) ;; abc \n (+ 1 2))";
     let inputstr = r#"(do ;; A comment in a file
 (def! inc4 (fn* (a) (+ 4 a)))
 (def! inc5 (fn* (a)  ;; a comment after code
