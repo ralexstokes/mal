@@ -132,17 +132,7 @@ fn test_reader() {
 
 #[test]
 fn test_read_form() {
-    let inputstr = r#"(do ;; A comment in a file
-(def! inc4 (fn* (a) (+ 4 a)))
-(def! inc5 (fn* (a)  ;; a comment after code
-  (+ 5 a)))
-
-(prn "incB.mal finished")
-"incB.mal return string"
-
-;; ending comment
-
-)"#;
+    let inputstr = r#"~@(a b c)"#;
     let tokens = tokenizer(inputstr.to_string());
     let mut reader = Reader::new(tokens);
     let ast = read_form(&mut reader).unwrap();
@@ -156,7 +146,43 @@ fn read_form(reader: &mut Reader) -> Option<Ast> {
     while let Some(token) = reader.peek() {
         match token.typ {
             TokenType::Atom => {
-                result = read_atom(reader);
+                match token.value.as_str() {
+                    "'" => {
+                        let mut seq = vec![Ast::Symbol("quote".to_string())];
+                        let _ = reader.next();
+                        if let Some(next) = read_form(reader) {
+                            seq.push(next);
+                            result = Ast::List(seq).into();
+                        }
+                    }
+                    "`" => {
+                        let mut seq = vec![Ast::Symbol("quasiquote".to_string())];
+                        let _ = reader.next();
+                        if let Some(next) = read_form(reader) {
+                            seq.push(next);
+                            result = Ast::List(seq).into();
+                        }
+                    }
+                    "~" => {
+                        let mut seq = vec![Ast::Symbol("unquote".to_string())];
+                        let _ = reader.next();
+                        if let Some(next) = read_form(reader) {
+                            seq.push(next);
+                            result = Ast::List(seq).into();
+                        }
+                    }
+                    "~@" => {
+                        let mut seq = vec![Ast::Symbol("splice-unquote".to_string())];
+                        let _ = reader.next();
+                        if let Some(next) = read_form(reader) {
+                            seq.push(next);
+                            result = Ast::List(seq).into();
+                        }
+                    }
+                    _ => {
+                        result = read_atom(reader);
+                    }
+                }
                 break;
             }
             TokenType::OpenList => {
