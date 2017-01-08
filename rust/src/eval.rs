@@ -18,6 +18,7 @@ const LAMBDA_FORM: &'static str = "fn*";
 const EVAL_FORM: &'static str = "eval";
 const ENV_FORM: &'static str = "env";
 const QUOTE_FORM: &'static str = "quote";
+const QUASIQUOTE_FORM: &'static str = "quasiquote";
 
 fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
     if seq.is_empty() {
@@ -37,6 +38,7 @@ fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
                         EVAL_FORM => eval_eval(eval_ops(operands.to_vec(), env.clone()), env),
                         ENV_FORM => eval_env(env),
                         QUOTE_FORM => eval_quote(operands.to_vec()),
+                        QUASIQUOTE_FORM => eval_quasiquote(operands.to_vec(), env),
                         _ => apply(operator, eval_ops(operands.to_vec(), env.clone()), env),
                     }
                 }
@@ -194,4 +196,82 @@ fn eval_env(env: Env) -> Option<Ast> {
 fn eval_quote(seq: Vec<Ast>) -> Option<Ast> {
     seq.first()
         .and_then(|quoted| quoted.clone().into())
+}
+
+fn eval_quasiquote(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+    seq.first()
+        .and_then(|arg| eval_quasiquote_for(arg, env.clone()))
+        .and_then(|ast| eval(&ast, env))
+}
+
+fn eval_quasiquote_for(arg: &Ast, env: Env) -> Option<Ast> {
+    let arg_elems = match *arg {
+        Ast::List(ref seq) if !seq.is_empty() => seq.to_vec(),
+        _ => {
+            let mut result: Vec<Ast> = vec![];
+            result.push(Ast::Symbol("quote".to_string()));
+            result.push(arg.clone());
+            return Ast::List(result).into();
+        }
+    };
+
+    let first = &arg_elems[0];
+    match *first {
+        Ast::Symbol(ref s) if s == "unquote" => {
+            if arg_elems.len() >= 2 {
+                arg_elems[1].clone().into()
+            } else {
+                None
+            }
+        }
+        Ast::List(ref seq) if !seq.is_empty() => {
+            seq.split_first()
+                .and_then(|(first, rest)| {
+                    match *first {
+                        Ast::Symbol(ref s) if s == "splice-unquote" => {
+                            rest.first()
+                                .and_then(|second| {
+                                    let mut result: Vec<Ast> = vec![];
+                                    result.push(Ast::Symbol("concat".to_string()));
+                                    result.push(second.clone());
+
+                                    let rest = arg_elems[1..].to_vec();
+                                    let next = Ast::List(rest);
+
+                                    eval_quasiquote_for(&next, env.clone()).and_then(|vals| {
+                                        result.push(vals);
+                                        Ast::List(result).into()
+                                    })
+                                })
+                        }
+                        _ => {
+                            eval_quasiquote_for(&arg_elems[0], env.clone()).and_then(|first| {
+                                let rest = arg_elems[1..].to_vec();
+                                let next = Ast::List(rest);
+                                eval_quasiquote_for(&next, env.clone()).and_then(|second| {
+                                    let mut result: Vec<Ast> = vec![];
+                                    result.push(Ast::Symbol("cons".to_string()));
+                                    result.push(first.clone());
+                                    result.push(second.clone());
+                                    Ast::List(result).into()
+                                })
+                            })
+                        }
+                    }
+                })
+        }
+        _ => {
+            eval_quasiquote_for(&arg_elems[0], env.clone()).and_then(|first| {
+                let rest = arg_elems[1..].to_vec();
+                let next = Ast::List(rest);
+                eval_quasiquote_for(&next, env.clone()).and_then(|second| {
+                    let mut result: Vec<Ast> = vec![];
+                    result.push(Ast::Symbol("cons".to_string()));
+                    result.push(first.clone());
+                    result.push(second.clone());
+                    Ast::List(result).into()
+                })
+            })
+        }
+    }
 }
