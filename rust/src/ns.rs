@@ -80,6 +80,9 @@ pub fn core() -> Ns {
                                                      ("slurp", slurp),
                                                      ("cons", cons),
                                                      ("concat", concat),
+                                                     ("nth", nth),
+                                                     ("first", first),
+                                                     ("rest", rest),
     ];
     let bindings = mappings.iter()
         .map(|&(k, v)| (k.to_string(), Ast::Fn(v)))
@@ -358,4 +361,60 @@ fn concat(args: Vec<Ast>) -> Option<Ast> {
     }
 
     Ast::List(result).into()
+}
+
+// nth: this function takes a list (or vector) and a number (index) as arguments, returns the element of the list at the given index. If the index is out of range, this function raises an exception.
+fn nth(args: Vec<Ast>) -> Option<Ast> {
+    let result = args.split_first().and_then(|(seq, rest)| {
+        rest.split_first().and_then(|(idx, _)| {
+            match *seq {
+                Ast::List(ref seq) => {
+                    match *idx {
+                        Ast::Number(n) => {
+                            let n = n as usize;
+                            seq.get(n)
+                        },
+                        _ => None
+                    }
+                },
+                _ => None
+            }
+        })
+    });
+    result.and_then(|result| result.clone().into())
+}
+
+// first: this function takes a list (or vector) as its argument and return the first element. If the list (or vector) is empty or is nil then nil is returned.
+fn first(args: Vec<Ast>) -> Option<Ast> {
+    args.first().and_then(|seq| {
+        match *seq {
+            Ast::List(ref seq)  => {
+                if seq.is_empty() {
+                    Some(Ast::Nil)
+                } else {
+                    seq.first().map(|elem| elem.clone())
+                }
+            },
+            Ast::Nil => Some(Ast::Nil),
+            _ => None
+        }
+    })
+}
+
+// rest: this function takes a list (or vector) as its argument and returns a new list containing all the elements except the first.
+fn rest(args: Vec<Ast>) -> Option<Ast> {
+    args.first().and_then(|seq| {
+        match *seq {
+            Ast::List(ref seq)  => {
+                if seq.is_empty() {
+                    Ast::List(vec![]).into()
+                } else {
+                    let items = seq[1..].iter().map(|elem| elem.clone()).collect::<Vec<_>>();
+                    Ast::List(items).into()
+                }
+            },
+            Ast::Nil => Some(Ast::Nil),
+            _ => None
+        }
+    })
 }
