@@ -126,8 +126,8 @@ fn eval_let(seq: Vec<Ast>, env: Env) -> Option<Ast> {
     seq.split_first()
         .and_then(|(bindings, body)| {
             if let Ast::List(ref seq) = *bindings {
-                let body = Ast::List(body.to_vec());
-                build_let_env(seq.to_vec(), env).and_then(|env| eval(&body, env))
+                let body = body.to_vec();
+                build_let_env(seq.to_vec(), env).and_then(|env| eval_sequence(body, env))
             } else {
                 None
             }
