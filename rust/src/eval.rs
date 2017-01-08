@@ -3,11 +3,13 @@ use ns;
 use env::{Env, empty_from, new, root};
 
 pub fn eval(ast: &Ast, env: Env) -> Option<Ast> {
-    match ast {
-        &Ast::Symbol(ref s) => env.borrow().get(s),
-        &Ast::List(ref seq) => eval_list(seq.to_vec(), env),
-        _ => ast.clone().into(), // self-evaluating
-    }
+    macroexpand(ast, env.clone()).and_then(|ast| {
+        match ast {
+            Ast::Symbol(ref s) => env.borrow().get(s),
+            Ast::List(ref seq) => eval_list(seq.to_vec(), env),
+            _ => ast.clone().into(), // self-evaluating
+        }
+    })
 }
 
 const IF_FORM: &'static str = "if";
@@ -19,32 +21,35 @@ const EVAL_FORM: &'static str = "eval";
 const ENV_FORM: &'static str = "env";
 const QUOTE_FORM: &'static str = "quote";
 const QUASIQUOTE_FORM: &'static str = "quasiquote";
+const MACRO_FORM: &'static str = "defmacro!";
+const MACROEXPAND_FORM: &'static str = "macroexpand";
 
 fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
     if seq.is_empty() {
         return Some(Ast::List(seq));
     }
 
-    seq.split_first()
-        .and_then(|(operator, operands)| {
-            match operator {
-                &Ast::Symbol(ref s) => {
-                    match s.as_str() {
-                        IF_FORM => eval_if(operands.to_vec(), env),
-                        SEQUENCE_FORM => eval_sequence(operands.to_vec(), env),
-                        DEFINE_FORM => eval_define(operands.to_vec(), env),
-                        LET_FORM => eval_let(operands.to_vec(), env),
-                        LAMBDA_FORM => eval_lambda(operands.to_vec(), env),
-                        EVAL_FORM => eval_eval(eval_ops(operands.to_vec(), env.clone()), env),
-                        ENV_FORM => eval_env(env),
-                        QUOTE_FORM => eval_quote(operands.to_vec()),
-                        QUASIQUOTE_FORM => eval_quasiquote(operands.to_vec(), env),
-                        _ => apply(operator, eval_ops(operands.to_vec(), env.clone()), env),
-                    }
+    seq.split_first().and_then(|(operator, operands)| {
+        match *operator {
+            Ast::Symbol(ref s) => {
+                match s.as_str() {
+                    IF_FORM => eval_if(operands.to_vec(), env),
+                    SEQUENCE_FORM => eval_sequence(operands.to_vec(), env),
+                    DEFINE_FORM => eval_define(operands.to_vec(), env),
+                    LET_FORM => eval_let(operands.to_vec(), env),
+                    LAMBDA_FORM => eval_lambda(operands.to_vec(), env),
+                    EVAL_FORM => eval_eval(eval_ops(operands.to_vec(), env.clone()), env),
+                    ENV_FORM => eval_env(env),
+                    QUOTE_FORM => eval_quote(operands.to_vec()),
+                    QUASIQUOTE_FORM => eval_quasiquote(operands.to_vec(), env),
+                    MACRO_FORM => eval_macro(operands.to_vec(), env),
+                    MACROEXPAND_FORM => eval_macroexpand(operands.to_vec(), env),
+                    _ => apply(operator, eval_ops(operands.to_vec(), env.clone()), env),
                 }
-                _ => apply(operator, eval_ops(operands.to_vec(), env.clone()), env),
             }
-        })
+            _ => apply(operator, eval_ops(operands.to_vec(), env.clone()), env),
+        }
+    })
 }
 
 fn eval_ops(operands: Vec<Ast>, env: Env) -> Vec<Ast> {
@@ -58,7 +63,7 @@ fn eval_ops(operands: Vec<Ast>, env: Env) -> Vec<Ast> {
 fn apply(operator: &Ast, evops: Vec<Ast>, env: Env) -> Option<Ast> {
     eval(operator, env.clone()).and_then(|evop| {
         match evop {
-            Ast::Lambda { params, body, env } => {
+            Ast::Lambda { params, body, env, .. } => {
                 let ns = ns::new_from(params, evops);
                 let new_env = new(Some(env.clone()), ns);
 
@@ -171,6 +176,7 @@ fn eval_lambda(seq: Vec<Ast>, env: Env) -> Option<Ast> {
             params: params,
             body: body,
             env: env,
+            is_macro: false,
         }
         .into()
 }
@@ -274,4 +280,95 @@ fn eval_quasiquote_for(arg: &Ast, env: Env) -> Option<Ast> {
             })
         }
     }
+}
+
+
+fn eval_macro(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+    if seq.len() < 2 {
+        return None;
+    }
+
+    let n = match seq[0] {
+        Ast::Symbol(ref s) => s.clone(),
+        _ => unreachable!(),
+    };
+    let ref val = seq[1];
+
+    eval(val, env.clone()).and_then(|f| {
+        match f {
+            Ast::Lambda { params, body, env, .. } => {
+                let new_f = Ast::Lambda {
+                    params: params.clone(),
+                    body: body.clone(),
+                    env: env.clone(),
+                    is_macro: true,
+                };
+                env.borrow_mut().set(n, new_f.clone());
+                Some(new_f)
+            }
+            _ => None,
+        }
+    })
+}
+
+fn is_macro_call(ast: &Ast, env: Env) -> bool {
+    match *ast {
+        Ast::List(ref seq) => {
+            if seq.is_empty() {
+                return false;
+            }
+
+            match seq[0] {
+                Ast::Symbol(ref s) => {
+                    match env.borrow().get(s) {
+                        Some(ast) => {
+                            match ast {
+                                Ast::Lambda { is_macro, .. } => is_macro.into(),
+                                _ => false.into(),
+                            }
+                        }
+                        None => false,
+                    }
+                }
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+fn macroexpand(ast: &Ast, env: Env) -> Option<Ast> {
+    let mut result = ast.clone();
+    while is_macro_call(&result, env.clone()) {
+        let expansion = match result {
+            Ast::List(ref seq) => {
+                // using invariants of is_macro_call to skip some checks here
+                match seq[0] {
+                    Ast::Symbol(ref s) => {
+                        let ast = match env.borrow().get(s) {
+                            Some(ast) => ast.clone().into(),
+                            None => None,
+                        };
+                        if let Some(ast) = ast {
+                            apply(&ast, eval_ops(seq[1..].to_vec(), env.clone()), env.clone())
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        if let Some(val) = expansion {
+            result = val;
+        } else {
+            return None;
+        }
+    }
+    result.into()
+}
+
+fn eval_macroexpand(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+    seq.first().and_then(|ast| macroexpand(ast, env))
 }

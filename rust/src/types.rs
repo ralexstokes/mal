@@ -15,6 +15,7 @@ pub enum Ast {
         params: Vec<Ast>,
         body: Vec<Ast>,
         env: Env,
+        is_macro: bool,
     },
     Fn(HostFn),
     List(Vec<Ast>),

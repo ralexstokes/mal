@@ -26,7 +26,13 @@ pub fn pr_str(ast: Ast, readably: bool) -> Option<String> {
                 .join(" ");
             ("(".to_string() + &results + ")").into()
         }
-        Ast::Lambda { .. } => Some("#<fn>".to_string()),
+        Ast::Lambda { is_macro, .. } => {
+            if is_macro {
+                "#<fn>-macro".to_string().into()
+            } else {
+                "#<fn>".to_string().into()
+            }
+        }
         Ast::Fn(_) => Some("#<host-fn>".to_string()),
     }
 }
