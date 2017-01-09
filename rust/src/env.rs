@@ -36,7 +36,7 @@ impl EnvData {
         self.bindings.insert(key, val);
     }
 
-    pub fn get(&self, key: &String) -> Option<Ast> {
+    pub fn get(&self, key: &str) -> Option<Ast> {
         self.bindings
             .get(key)
             .and_then(|val| Some(val.clone()))
