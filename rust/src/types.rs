@@ -1,4 +1,5 @@
 use std::fmt;
+use std::cmp::PartialEq;
 use printer;
 use env::Env;
 
@@ -26,5 +27,22 @@ impl fmt::Display for Ast {
         write!(f,
                "{}",
                printer::print(self.clone()).unwrap_or("error".to_string()))
+    }
+}
+
+impl PartialEq for Ast {
+    fn eq(&self, other: &Ast) -> bool {
+        use types::Ast::*;
+        match (self.clone(), other.clone()) {
+            (Nil, Nil) => true,
+            (Boolean(x), Boolean(y)) if x == y => true,
+            (String(ref s), String(ref t)) if s == t => true,
+            (Number(x), Number(y)) if x == y => true,
+            (Symbol(ref s), Symbol(ref t)) if s == t => true,
+            (Lambda { .. }, Lambda { .. }) => false,
+            (Fn(f), Fn(g)) if f == g => true,
+            (List(xs), List(ys)) => xs == ys,
+            _ => false,
+        }
     }
 }

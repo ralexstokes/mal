@@ -231,31 +231,6 @@ fn is_equal(args: Vec<Ast>) -> Option<Ast> {
         .and_then(|result| Ast::Boolean(result).into())
 }
 
-fn is_pair_equal(fst: Ast, snd: Ast) -> bool {
-    use types::Ast::*;
-    match (fst, snd) {
-        (Nil, Nil) => true,
-        (Boolean(x), Boolean(y)) if x == y => true,
-        (String(ref s), String(ref t)) if s == t => true,
-        (Number(x), Number(y)) if x == y => true,
-        (Symbol(ref s), Symbol(ref t)) if s == t => true,
-        (Lambda { .. }, Lambda { .. }) => false,
-        (Fn(f), Fn(g)) if f == g => true,
-        (List(xs), List(ys)) => {
-            xs.len() == ys.len() &&
-            xs.iter()
-                .zip(ys.iter())
-                .map(|(fst, snd)| is_pair_equal(fst.clone(), snd.clone()))
-                .all(id)
-        }
-        _ => false,
-    }
-}
-
-fn id<T>(x: T) -> T {
-    x
-}
-
 fn args_are<F>(args: Vec<Ast>, f: F) -> Option<Ast>
     where F: Fn(i64, i64) -> bool
 {
