@@ -68,13 +68,8 @@ impl DefaultReader {
 
         match read {
             // catches CTRL-D
-            Ok(n) => {
-                if n <= 0 {
-                    None
-                } else {
-                    Some(input.trim().to_string())
-                }
-            }
+            Ok(n) if n <= 0 => None,
+            Ok(_) => Some(input.trim().to_string()),
             Err(_) => None,
         }
     }
@@ -130,7 +125,7 @@ impl LineReader {
                 self.editor.add_history_entry(&line);
                 Some(line)
             }
-            Err(..) => None,
+            Err(_) => None,
         }
     }
 

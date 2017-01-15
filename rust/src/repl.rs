@@ -4,11 +4,14 @@ use printer::print;
 use eval::eval;
 use env;
 use prelude;
-use types::Ast;
+use types::{Ast, EvaluationResult};
+use error::{Error, ReplError, error_message};
 
 pub struct Repl {
     reader: Reader,
 }
+
+pub type ReplResult = ::std::result::Result<String, Error>;
 
 const ARGV_SYMBOL: &'static str = "*ARGV*";
 
@@ -23,9 +26,14 @@ impl Repl {
         let mut pretext: Option<String> = None;
         match prelude::load(self, env.clone()) {
             Ok(msg) => pretext = msg.clone().into(),
-            Err(Error::EmptyOutput) => {}
-            Err(Error::EvalError(msg)) => self.reader.write_err(msg),
-            Err(Error::EOF) => unreachable!(),
+            Err(Error::ReplError(e)) => {
+                match e {
+                    ReplError::EmptyOutput => {}
+                    ReplError::EvalError(msg) => self.reader.write_err(msg),
+                    ReplError::EOF => unreachable!(),
+                }
+            }
+            _ => unreachable!(),
         }
 
         let args = ::std::env::args().skip(1).collect::<Vec<_>>();
@@ -42,7 +50,7 @@ impl Repl {
             if let Some(result) = result {
                 match result {
                     Ok(result) => println!("{}", result),
-                    Err(Error::EvalError(msg)) => println!("{}", msg),
+                    Err(Error::EvaluationError(msg)) => println!("{}", msg),
                     _ => {}
                 }
             }
@@ -56,38 +64,37 @@ impl Repl {
         loop {
             match self.rep_from_reader(env.clone()) {
                 Ok(result) => println!("{}", result),
-                Err(Error::EmptyOutput) => continue,
-                Err(Error::EvalError(msg)) => println!("{}", msg),
-                Err(Error::EOF) => break,
+                Err(Error::ReaderError(e)) => {
+                    println!("{}", e);
+                }
+                Err(Error::EvaluationError(e)) => {
+                    println!("{}", e);
+                }
+                Err(Error::ReplError(e)) => {
+                    match e {
+                        ReplError::EmptyOutput => continue,
+                        ReplError::EvalError(msg) => println!("{}", msg),
+                        ReplError::EOF => break,
+                    }
+                }
             }
         }
     }
 
-    fn rep_from_reader(&mut self, env: env::Env) -> Result<String, Error> {
-        match self.reader.read() {
-            Some(line) => self.rep(line, env),
-            None => Err(Error::EOF),
-        }
+    fn rep_from_reader(&mut self, env: env::Env) -> ReplResult {
+        self.reader
+            .read()
+            .ok_or(Error::ReplError(ReplError::EOF))
+            .and_then(|line| self.rep(line, env))
     }
 
-    fn rep_from_file(&mut self, file_name: &str, env: env::Env) -> Result<String, Error> {
+    fn rep_from_file(&mut self, file_name: &str, env: env::Env) -> ReplResult {
         self.rep(format!("(load-file \"{}\")", file_name), env)
     }
 
-    pub fn rep(&mut self, input: String, env: env::Env) -> Result<String, Error> {
-        match read(input) {
-            Some(ref ast) => {
-                eval(ast, env.clone())
-                    .and_then(print)
-                    .ok_or_else(|| Error::EvalError("some error".to_string()))
-            }
-            None => Err(Error::EmptyOutput),
-        }
+    pub fn rep(&mut self, input: String, env: env::Env) -> ReplResult {
+        let ast = try!(read(input));
+        let val = try!(eval(&ast, env));
+        Ok(print(&val))
     }
-}
-
-pub enum Error {
-    EmptyOutput,
-    EvalError(String),
-    EOF,
 }

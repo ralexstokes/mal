@@ -1,5 +1,6 @@
 use env::Env;
-use repl::{Repl, Error};
+use error::Error;
+use repl::Repl;
 
 pub fn load(repl: &mut Repl, env: Env) -> Result<String, Error> {
     let inputs =

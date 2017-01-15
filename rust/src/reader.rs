@@ -1,7 +1,10 @@
 use regex::{Regex, Captures};
 use types::Ast;
+use error::ReaderError;
 
-pub fn read(input: String) -> Option<Ast> {
+pub type ReaderResult = ::std::result::Result<Ast, ReaderError>;
+
+pub fn read(input: String) -> ReaderResult {
     let tokens = tokenizer(input);
     let mut reader = Reader::new(tokens);
     read_form(&mut reader)
@@ -140,8 +143,8 @@ fn test_read_form() {
     println!("{}", ast);
 }
 
-fn read_form(reader: &mut Reader) -> Option<Ast> {
-    let mut result: Option<Ast> = None;
+fn read_form(reader: &mut Reader) -> ReaderResult {
+    let mut result: ReaderResult = Err(ReaderError::Message("could not read form".to_string()));
 
     while let Some(token) = reader.peek() {
         match token.typ {
@@ -150,33 +153,33 @@ fn read_form(reader: &mut Reader) -> Option<Ast> {
                     "'" => {
                         let mut seq = vec![Ast::Symbol("quote".to_string())];
                         let _ = reader.next();
-                        if let Some(next) = read_form(reader) {
+                        if let Ok(next) = read_form(reader) {
                             seq.push(next);
-                            result = Ast::List(seq).into();
+                            result = Ok(Ast::List(seq));
                         }
                     }
                     "`" => {
                         let mut seq = vec![Ast::Symbol("quasiquote".to_string())];
                         let _ = reader.next();
-                        if let Some(next) = read_form(reader) {
+                        if let Ok(next) = read_form(reader) {
                             seq.push(next);
-                            result = Ast::List(seq).into();
+                            result = Ok(Ast::List(seq))
                         }
                     }
                     "~" => {
                         let mut seq = vec![Ast::Symbol("unquote".to_string())];
                         let _ = reader.next();
-                        if let Some(next) = read_form(reader) {
+                        if let Ok(next) = read_form(reader) {
                             seq.push(next);
-                            result = Ast::List(seq).into();
+                            result = Ok(Ast::List(seq))
                         }
                     }
                     "~@" => {
                         let mut seq = vec![Ast::Symbol("splice-unquote".to_string())];
                         let _ = reader.next();
-                        if let Some(next) = read_form(reader) {
+                        if let Ok(next) = read_form(reader) {
                             seq.push(next);
-                            result = Ast::List(seq).into();
+                            result = Ok(Ast::List(seq))
                         }
                     }
                     _ => {
@@ -198,7 +201,7 @@ fn read_form(reader: &mut Reader) -> Option<Ast> {
     result
 }
 
-fn read_list(reader: &mut Reader) -> Option<Ast> {
+fn read_list(reader: &mut Reader) -> ReaderResult {
     let _ = reader.next();
     let mut in_list = true;
 
@@ -212,7 +215,7 @@ fn read_list(reader: &mut Reader) -> Option<Ast> {
                 break;
             }
             _ => {
-                if let Some(ast) = read_form(reader) {
+                if let Ok(ast) = read_form(reader) {
                     list.push(ast);
                 }
             }
@@ -220,44 +223,47 @@ fn read_list(reader: &mut Reader) -> Option<Ast> {
     }
 
     if in_list {
-        return None;
+        return Err(ReaderError::Message("did not close list properly".to_string()));
     }
 
-    Some(Ast::List(list))
+    Ok(Ast::List(list))
 }
 
-fn read_atom(reader: &mut Reader) -> Option<Ast> {
-    reader.next().and_then(|token| {
-        nil_from(&token)
-            .or(boolean_from(&token))
-            .or(number_from(&token))
-            .or(string_from(&token))
-            .or(symbol_from(&token))
-    })
+fn read_atom(reader: &mut Reader) -> ReaderResult {
+    reader.next()
+        .ok_or(ReaderError::Message("error missing tokens".to_string()))
+        .and_then(|token| {
+            nil_from(&token)
+                .or(boolean_from(&token))
+                .or(number_from(&token))
+                .or(string_from(&token))
+                .or(symbol_from(&token))
+        })
 }
 
-fn nil_from(token: &Token) -> Option<Ast> {
+fn nil_from(token: &Token) -> ReaderResult {
     match token.value.as_str() {
-        "nil" => Some(Ast::Nil),
-        _ => None,
-    }
+            "nil" => Some(Ast::Nil),
+            _ => None,
+        }
+        .ok_or(ReaderError::Message("could not parse nil".to_string()))
 }
 
-fn boolean_from(token: &Token) -> Option<Ast> {
-    match token.value.parse::<bool>() {
-        Ok(p) => Some(Ast::Boolean(p)),
-        Err(_) => None,
-    }
+fn boolean_from(token: &Token) -> ReaderResult {
+    token.value
+        .parse::<bool>()
+        .map(|p| Ast::Boolean(p))
+        .map_err(|_| ReaderError::Message("could not parse boolean from this token".to_string()))
 }
 
-fn number_from(token: &Token) -> Option<Ast> {
-    match token.value.parse::<i64>() {
-        Ok(n) => Some(Ast::Number(n)),
-        Err(_) => None,
-    }
+fn number_from(token: &Token) -> ReaderResult {
+    token.value
+        .parse::<i64>()
+        .map(|n| Ast::Number(n))
+        .map_err(|_| ReaderError::Message("could not parse number from this token".to_string()))
 }
 
-fn string_from(token: &Token) -> Option<Ast> {
+fn string_from(token: &Token) -> ReaderResult {
     let s = &token.value;
 
     lazy_static! {
@@ -265,11 +271,12 @@ fn string_from(token: &Token) -> Option<Ast> {
     }
 
     if STRING.is_match(s) {
-        let new_str = &s[1..s.len() - 1];
-        Some(Ast::String(read_str(new_str)))
-    } else {
-        None
-    }
+            let new_str = &s[1..s.len() - 1];
+            Some(Ast::String(read_str(new_str)))
+        } else {
+            None
+        }
+        .ok_or(ReaderError::Message("could not produce a string for this token".to_string()))
 }
 
 
@@ -284,6 +291,6 @@ fn read_str(s: &str) -> String {
         .replace(r#"\\"#, "\\")
 }
 
-fn symbol_from(token: &Token) -> Option<Ast> {
-    Some(Ast::Symbol(token.value.clone()))
+fn symbol_from(token: &Token) -> ReaderResult {
+    Ok(Ast::Symbol(token.value.clone()))
 }

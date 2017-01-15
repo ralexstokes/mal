@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use types::{Ast, HostFn};
+use types::{Ast, HostFn, EvaluationResult};
+use error::{error_message, ReaderError, EvaluationError};
 use printer;
 use reader;
 use std::io::Read;
@@ -104,87 +105,87 @@ fn i64_from_ast(a: Ast, b: Ast) -> (i64, i64) {
     (aa, bb)
 }
 
-fn fold_first<F>(xs: Vec<Ast>, f: F) -> Option<Ast>
+fn fold_first<F>(seq: Vec<Ast>, f: F) -> EvaluationResult
     where F: Fn(Ast, Ast) -> Ast
 {
-    xs.split_first()
+    seq.split_first()
         .and_then(|(first, rest)| {
             let result = rest.iter()
                 .map(|a| a.clone())
                 .fold(first.clone(), f);
             Some(result)
         })
+        .ok_or(error_message("could not calculate op on seq"))
 }
 
-fn add(xs: Vec<Ast>) -> Option<Ast> {
-    fold_first(xs, |a, b| {
+fn add(seq: Vec<Ast>) -> EvaluationResult {
+    fold_first(seq, |a, b| {
         let (a, b) = i64_from_ast(a, b);
         Ast::Number(a + b)
     })
 }
 
-fn sub(xs: Vec<Ast>) -> Option<Ast> {
-    fold_first(xs, |a, b| {
+fn sub(seq: Vec<Ast>) -> EvaluationResult {
+    fold_first(seq, |a, b| {
         let (a, b) = i64_from_ast(a, b);
         Ast::Number(a - b)
     })
 }
 
-fn mul(xs: Vec<Ast>) -> Option<Ast> {
-    fold_first(xs, |a, b| {
+fn mul(seq: Vec<Ast>) -> EvaluationResult {
+    fold_first(seq, |a, b| {
         let (a, b) = i64_from_ast(a, b);
         Ast::Number(a * b)
     })
 }
 
-fn div(xs: Vec<Ast>) -> Option<Ast> {
-    fold_first(xs, |a, b| {
+fn div(seq: Vec<Ast>) -> EvaluationResult {
+    fold_first(seq, |a, b| {
         let (a, b) = i64_from_ast(a, b);
         Ast::Number(a / b)
     })
 }
 
 fn string_of(args: Vec<Ast>, readably: bool, separator: &str) -> String {
-    args.into_iter()
+    args.iter()
         .map(|p| printer::pr_str(p, readably))
-        .map(|p| p.unwrap())
         .collect::<Vec<_>>()
         .join(separator)
 }
 
 // prn: calls pr_str on each argument with print_readably set to true, joins the results with " ", prints the string to the screen and then returns nil.
-fn prn(args: Vec<Ast>) -> Option<Ast> {
+fn prn(args: Vec<Ast>) -> EvaluationResult {
     println!("{}", string_of(args, true, " "));
 
-    Ast::Nil.into()
+    Ok(Ast::Nil)
 }
 
 // pr-str: calls pr_str on each argument with print_readably set to true, joins the results with " " and returns the new string.
-fn print_to_str(args: Vec<Ast>) -> Option<Ast> {
+fn print_to_str(args: Vec<Ast>) -> EvaluationResult {
     let s = string_of(args, true, " ");
 
-    Ast::String(s).into()
+    Ok(Ast::String(s))
 }
 
 // str: calls pr_str on each argument with print_readably set to false, concatenates the results together ("" separator), and returns the new string.
-fn to_str(args: Vec<Ast>) -> Option<Ast> {
+fn to_str(args: Vec<Ast>) -> EvaluationResult {
     let s = string_of(args, false, "");
 
-    Ast::String(s).into()
+    Ok(Ast::String(s))
 }
 
 // println: calls pr_str on each argument with print_readably set to false, joins the results with " ", prints the string to the screen and then returns nil.
-fn println(args: Vec<Ast>) -> Option<Ast> {
+fn println(args: Vec<Ast>) -> EvaluationResult {
     println!("{}", string_of(args, false, " "));
 
-    Ast::Nil.into()
+    Ok(Ast::Nil)
 }
 
-fn to_list(args: Vec<Ast>) -> Option<Ast> {
-    Ast::List(args).into()
+fn to_list(args: Vec<Ast>) -> EvaluationResult {
+    Ok(Ast::List(args))
 }
 
-fn is_list(args: Vec<Ast>) -> Option<Ast> {
+fn is_list(args: Vec<Ast>) -> EvaluationResult {
     args.first()
         .and_then(|a| {
             let is = match a.clone() {
@@ -193,9 +194,10 @@ fn is_list(args: Vec<Ast>) -> Option<Ast> {
             };
             Ast::Boolean(is).into()
         })
+        .ok_or(error_message("could not determine if seq is list"))
 }
 
-fn is_empty(args: Vec<Ast>) -> Option<Ast> {
+fn is_empty(args: Vec<Ast>) -> EvaluationResult {
     args.first()
         .and_then(|a| {
             match a.clone() {
@@ -203,9 +205,10 @@ fn is_empty(args: Vec<Ast>) -> Option<Ast> {
                 _ => None,
             }
         })
+        .ok_or(error_message("could not determine if seq is empty"))
 }
 
-fn count_of(args: Vec<Ast>) -> Option<Ast> {
+fn count_of(args: Vec<Ast>) -> EvaluationResult {
     args.first()
         .and_then(|a| {
             match a.clone() {
@@ -214,9 +217,10 @@ fn count_of(args: Vec<Ast>) -> Option<Ast> {
                 _ => None,
             }
         })
+        .ok_or(error_message("could not determine count of seq"))
 }
 
-fn is_equal(args: Vec<Ast>) -> Option<Ast> {
+fn is_equal(args: Vec<Ast>) -> EvaluationResult {
     args.split_first()
         .and_then(|(first, rest)| {
             rest.split_first()
@@ -225,13 +229,13 @@ fn is_equal(args: Vec<Ast>) -> Option<Ast> {
                         return None;
                     }
 
-                    is_pair_equal(first.clone(), second.clone()).into()
+                    Ast::Boolean(first == second).into()
                 })
         })
-        .and_then(|result| Ast::Boolean(result).into())
+        .ok_or(error_message("could not determine if args are equal"))
 }
 
-fn args_are<F>(args: Vec<Ast>, f: F) -> Option<Ast>
+fn args_are<F>(args: Vec<Ast>, f: F) -> EvaluationResult
     where F: Fn(i64, i64) -> bool
 {
     args.split_first()
@@ -241,66 +245,73 @@ fn args_are<F>(args: Vec<Ast>, f: F) -> Option<Ast>
                     let (a, b) = i64_from_ast(first.clone(), second.clone());
                     Ast::Boolean(f(a, b)).into()
                 })
-        })
+        }).ok_or(error_message("could not determine if args are ordered"))
 }
 
 
-fn lt(args: Vec<Ast>) -> Option<Ast> {
+fn lt(args: Vec<Ast>) -> EvaluationResult {
     args_are(args, |a, b| a < b)
 }
 
 
-fn lte(args: Vec<Ast>) -> Option<Ast> {
+fn lte(args: Vec<Ast>) -> EvaluationResult {
     args_are(args, |a, b| a <= b)
 }
 
 
-fn gt(args: Vec<Ast>) -> Option<Ast> {
+fn gt(args: Vec<Ast>) -> EvaluationResult {
     args_are(args, |a, b| a > b)
 }
 
 
-fn gte(args: Vec<Ast>) -> Option<Ast> {
+fn gte(args: Vec<Ast>) -> EvaluationResult {
     args_are(args, |a, b| a >= b)
 }
 
 
-fn read_string(args: Vec<Ast>) -> Option<Ast> {
+fn read_string(args: Vec<Ast>) -> EvaluationResult {
     args.first()
+        .ok_or(error_message("not enough arg in args"))
         .and_then(|arg| {
             match *arg {
                 Ast::String(ref s) => {
-                    reader::read(s.clone())
+                    reader::read(s.clone()).map_err(|e| {
+                            match e {
+                                ReaderError::Message(s) => {
+                                    EvaluationError::Message(s)
+                                }
+                            }
+                        })
                 },
-                _ => None
+                _ => Err(error_message("wrong type of first argument"))
             }
         })
 }
 
-fn slurp(args: Vec<Ast>) -> Option<Ast> {
-    args.first()
+fn slurp(args: Vec<Ast>) -> EvaluationResult {
+    let filename = args.first()
         .and_then(|arg| {
             match *arg {
-                Ast::String(ref filename) => {
-                    let mut buffer = String::new();
-                    let result = File::open(filename)
-                        .and_then(|mut f| {
-                            f.read_to_string(&mut buffer)
-                        });
-                    match result {
-                        Ok(_) => Some(Ast::String(buffer)),
-                        Err(e) => {
-                            println!("{}", e);
-                            None
-                        }
-                    }
-                },
+                Ast::String(ref filename) => filename.into(),
                 _ => None
             }
+        });
+
+    let mut buffer = String::new();
+    filename
+        .ok_or(error_message("slurp could not get filename from args"))
+        .and_then(|filename| {
+            File::open(filename)
+                .and_then(|mut f| {
+                    f.read_to_string(&mut buffer)
+                }).map(|_| {
+                    Ast::String(buffer)
+                }).map_err(|_| error_message("slurp could not read file"))
         })
 }
+
 // cons: this function takes a list as its second parameter and returns a new list that has the first argument prepended to it.
-fn cons(args: Vec<Ast>) -> Option<Ast> {
+fn cons(args: Vec<Ast>) -> EvaluationResult {
     args.split_first()
         .and_then(|(elem, rest)| {
             rest.split_first()
@@ -318,10 +329,11 @@ fn cons(args: Vec<Ast>) -> Option<Ast> {
                     }
                 })
         })
+        .ok_or(error_message("call to cons failed"))
 }
 
 // concat: this functions takes 0 or more lists as parameters and returns a new list that is a concatenation of all the list parameters.
-fn concat(args: Vec<Ast>) -> Option<Ast> {
+fn concat(args: Vec<Ast>) -> EvaluationResult {
     let mut result: Vec<Ast> = vec![];
 
     for arg in args {
@@ -331,15 +343,15 @@ fn concat(args: Vec<Ast>) -> Option<Ast> {
                     result.push(s.clone());
                 }
             },
-            _ => return None
+            _ => return Err(error_message("wrong arg type for concat"))
         }
     }
 
-    Ast::List(result).into()
+    Ok(Ast::List(result))
 }
 
 // nth: this function takes a list (or vector) and a number (index) as arguments, returns the element of the list at the given index. If the index is out of range, this function raises an exception.
-fn nth(args: Vec<Ast>) -> Option<Ast> {
+fn nth(args: Vec<Ast>) -> EvaluationResult {
     let result = args.split_first().and_then(|(seq, rest)| {
         rest.split_first().and_then(|(idx, _)| {
             match *seq {
@@ -357,10 +369,11 @@ fn nth(args: Vec<Ast>) -> Option<Ast> {
         })
     });
     result.and_then(|result| result.clone().into())
+        .ok_or(error_message("call to nth failed"))
 }
 
 // first: this function takes a list (or vector) as its argument and return the first element. If the list (or vector) is empty or is nil then nil is returned.
-fn first(args: Vec<Ast>) -> Option<Ast> {
+fn first(args: Vec<Ast>) -> EvaluationResult {
     args.first().and_then(|seq| {
         match *seq {
             Ast::List(ref seq)  => {
@@ -373,23 +386,23 @@ fn first(args: Vec<Ast>) -> Option<Ast> {
             Ast::Nil => Some(Ast::Nil),
             _ => None
         }
-    })
+    }).ok_or(error_message("call to first failed"))
 }
 
 // rest: this function takes a list (or vector) as its argument and returns a new list containing all the elements except the first.
-fn rest(args: Vec<Ast>) -> Option<Ast> {
+fn rest(args: Vec<Ast>) -> EvaluationResult {
     args.first().and_then(|seq| {
         match *seq {
             Ast::List(ref seq)  => {
-                if seq.is_empty() {
-                    Ast::List(vec![]).into()
+                let items = if seq.is_empty() {
+                    vec![]
                 } else {
-                    let items = seq[1..].iter().map(|elem| elem.clone()).collect::<Vec<_>>();
-                    Ast::List(items).into()
-                }
+                    seq[1..].to_vec()//.iter().map(|elem| elem.clone()).collect::<Vec<_>>()
+                };
+                Ast::List(items).into()
             },
             Ast::Nil => Some(Ast::Nil),
             _ => None
         }
-    })
+    }).ok_or(error_message("call to rest failed"))
 }

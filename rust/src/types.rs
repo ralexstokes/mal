@@ -2,8 +2,11 @@ use std::fmt;
 use std::cmp::PartialEq;
 use printer;
 use env::Env;
+use error::EvaluationError;
 
-pub type HostFn = fn(Vec<Ast>) -> Option<Ast>;
+pub type EvaluationResult = ::std::result::Result<Ast, EvaluationError>;
+
+pub type HostFn = fn(Vec<Ast>) -> EvaluationResult;
 
 #[derive(Debug,Clone)]
 pub enum Ast {
@@ -24,9 +27,7 @@ pub enum Ast {
 
 impl fmt::Display for Ast {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "{}",
-               printer::print(self.clone()).unwrap_or("error".to_string()))
+        write!(f, "{}", printer::print(self))
     }
 }
 

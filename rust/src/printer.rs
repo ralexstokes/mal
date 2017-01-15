@@ -1,39 +1,38 @@
 use types::Ast;
 
-pub fn print(ast: Ast) -> Option<String> {
+pub fn print(ast: &Ast) -> String {
     pr_str(ast, true)
 }
 
 // When print_readably is true, doublequotes, newlines, and backslashes are translated into their printed representations (the reverse of the reader).
-pub fn pr_str(ast: Ast, readably: bool) -> Option<String> {
-    match ast {
-        Ast::Nil => Some("nil".to_string()),
-        Ast::Boolean(b) => Some(b.to_string()),
+pub fn pr_str(ast: &Ast, readably: bool) -> String {
+    match *ast {
+        Ast::Nil => "nil".to_string(),
+        Ast::Boolean(b) => b.to_string(),
         Ast::String(ref s) => {
             if readably {
-                Some(unread_str(s))
+                unread_str(s)
             } else {
-                Some(s.clone())
+                s.clone()
             }
         }
-        Ast::Number(n) => Some(n.to_string()),
-        Ast::Symbol(ref s) => Some(s.clone()),
+        Ast::Number(n) => n.to_string(),
+        Ast::Symbol(ref s) => s.clone(),
         Ast::List(ref seq) => {
             let results = seq.into_iter()
-                .map(|node| pr_str(node.clone(), readably))
-                .map(|n| n.unwrap())
+                .map(|node| pr_str(&node, readably))
                 .collect::<Vec<_>>()
                 .join(" ");
-            ("(".to_string() + &results + ")").into()
+            ("(".to_string() + &results + ")")
         }
         Ast::Lambda { is_macro, .. } => {
             if is_macro {
-                "#<fn>-macro".to_string().into()
+                "#<macro>".to_string()
             } else {
-                "#<fn>".to_string().into()
+                "#<fn>".to_string()
             }
         }
-        Ast::Fn(_) => Some("#<host-fn>".to_string()),
+        Ast::Fn(_) => "#<host-fn>".to_string(),
     }
 }
 
@@ -63,7 +62,7 @@ mod tests {
         let inputstr = "foobar";
         let input = inputstr.to_string();
         let ast = Ast::Symbol(input);
-        let output = print(ast).unwrap();
+        let output = print(ast);
         if output.as_str() != inputstr {
             panic!("not equal")
         }
@@ -72,7 +71,7 @@ mod tests {
     #[test]
     fn test_print_number() {
         let ast = Ast::Number(3);
-        let output = print(ast).unwrap();
+        let output = print(ast);
         if output.as_str() != "3" {
             panic!("not equal")
         }
@@ -81,7 +80,7 @@ mod tests {
     #[test]
     fn test_print_list() {
         let ast = Ast::List(vec![Ast::Symbol("+".to_string()), Ast::Number(2), Ast::Number(3)]);
-        let output = print(ast).unwrap();
+        let output = print(ast);
         if output.as_str() != "(+ 2 3)" {
             panic!("not equal")
         }

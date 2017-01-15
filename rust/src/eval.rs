@@ -1,13 +1,15 @@
-use types::Ast;
+use types::{Ast, EvaluationResult};
+use error::{error_message, EvaluationError};
 use ns;
 use env::{Env, empty_from, new, root};
 
-pub fn eval(ast: &Ast, env: Env) -> Option<Ast> {
+pub fn eval(ast: &Ast, env: Env) -> EvaluationResult {
     macroexpand(ast, env.clone()).and_then(|ast| {
         match ast {
-            Ast::Symbol(ref s) => env.borrow().get(s),
+            Ast::Symbol(s) => env.borrow().get(&s)
+                .ok_or(EvaluationError::MissingSymbol(s)),
             Ast::List(ref seq) => eval_list(seq.to_vec(), env),
-            _ => ast.clone().into(), // self-evaluating
+            _ => Ok(ast.clone()), // self-evaluating
         }
     })
 }
@@ -23,13 +25,23 @@ const QUOTE_FORM: &'static str = "quote";
 const QUASIQUOTE_FORM: &'static str = "quasiquote";
 const MACRO_FORM: &'static str = "defmacro!";
 const MACROEXPAND_FORM: &'static str = "macroexpand";
+const TRY_FORM: &'static str = "try*";
+const CATCH_FORM: &'static str = "catch*";
+// (try* A (catch* B C)). The form A is evaluated, if it throws an exception, then form C is evaluated with a new environment that binds the symbol B to the value of the exception that was thrown.
 
-fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+// (try* (map throw (list "my err")) (catch* exc exc))
+
+// If your target language has built-in try/catch style exception handling then you are already 90% of the way done. Add a (native language) try/catch block that evaluates A within the try block and catches all exceptions. If an exception is caught, then translate it to a mal type/value. For native exceptions this is either the message string or a mal hash-map that contains the message string and other attributes of the exception. When a regular mal type/value is used as an exception, you will probably need to store it within a native exception type in order to be able to convey/transport it using the native try/catch mechanism. Then you will extract the mal type/value from the native exception. Create a new mal environment that binds B to the value of the exception. Finally, evaluate C using that new environment.
+// If your target language does not have built-in try/catch style exception handling then you have some extra work to do. One of the most straightforward approaches is to create a a global error variable that stores the thrown mal type/value. The complication is that there are a bunch of places where you must check to see if the global error state is set and return without proceeding. The rule of thumb is that this check should happen at the top of your EVAL function and also right after any call to EVAL (and after any function call that might happen to call EVAL further down the chain). Yes, it is ugly, but you were warned in the section on picking a language.
+
+fn eval_list(seq: Vec<Ast>, env: Env) -> EvaluationResult {
     if seq.is_empty() {
-        return Some(Ast::List(seq));
+        return Ok(Ast::List(seq));
     }
 
-    seq.split_first().and_then(|(operator, operands)| {
+    seq.split_first()
+        .ok_or(EvaluationError::Message("could not split list to eval".to_string()))
+        .and_then(|(operator, operands)| {
         match *operator {
             Ast::Symbol(ref s) => {
                 match s.as_str() {
@@ -55,12 +67,12 @@ fn eval_list(seq: Vec<Ast>, env: Env) -> Option<Ast> {
 fn eval_ops(operands: Vec<Ast>, env: Env) -> Vec<Ast> {
     operands.iter()
         .map(|operand| eval(operand, env.clone()))
-        .filter(|operand| operand.is_some())
+        .filter(|operand| operand.is_ok())
         .map(|operand| operand.unwrap())
         .collect::<Vec<_>>()
 }
 
-fn apply(operator: &Ast, evops: Vec<Ast>, env: Env) -> Option<Ast> {
+fn apply(operator: &Ast, evops: Vec<Ast>, env: Env) -> EvaluationResult {
     eval(operator, env.clone()).and_then(|evop| {
         match evop {
             Ast::Lambda { params, body, env, .. } => {
@@ -75,16 +87,21 @@ fn apply(operator: &Ast, evops: Vec<Ast>, env: Env) -> Option<Ast> {
     })
 }
 
-fn eval_sequence(seq: Vec<Ast>, env: Env) -> Option<Ast> {
-    seq.iter()
+fn eval_sequence(seq: Vec<Ast>, env: Env) -> EvaluationResult {
+    let result = seq.iter()
+        // TODO want to handle errors inside map here, not below
         .map(|s| eval(&s, env.clone()))
-        .last()
-        .unwrap_or(None)
+        .last();
+    if let Some(result) = result {
+        result
+    } else {
+        Err(EvaluationError::Message("could not eval sequence".to_string()))
+    }
 }
 
-fn eval_if(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+fn eval_if(seq: Vec<Ast>, env: Env) -> EvaluationResult {
     if seq.len() < 2 {
-        return None;
+        return Err(EvaluationError::Message("wrong arity".to_string()));
     }
 
     let ref predicate = seq[0];
@@ -102,7 +119,7 @@ fn eval_if(seq: Vec<Ast>, env: Env) -> Option<Ast> {
                 if let Some(ref a) = alternative {
                     eval(a, env.clone())
                 } else {
-                    Some(Ast::Nil)
+                    Ok(Ast::Nil)
                 }
             }
             _ => eval(&consequent, env),
@@ -110,9 +127,9 @@ fn eval_if(seq: Vec<Ast>, env: Env) -> Option<Ast> {
     })
 }
 
-fn eval_define(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+fn eval_define(seq: Vec<Ast>, env: Env) -> EvaluationResult {
     if seq.len() < 2 {
-        return None;
+        return Err(EvaluationError::Message("wrong arity".to_string()));
     }
 
     let n = match seq[0] {
@@ -123,18 +140,21 @@ fn eval_define(seq: Vec<Ast>, env: Env) -> Option<Ast> {
 
     eval(val, env.clone()).and_then(|val| {
         env.borrow_mut().set(n, val.clone());
-        Some(val)
+        Ok(val)
     })
 }
 
-fn eval_let(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+fn eval_let(seq: Vec<Ast>, env: Env) -> EvaluationResult {
     seq.split_first()
+        .ok_or(EvaluationError::Message("wrong arity".to_string()))
         .and_then(|(bindings, body)| {
             if let Ast::List(ref seq) = *bindings {
                 let body = body.to_vec();
-                build_let_env(seq.to_vec(), env).and_then(|env| eval_sequence(body, env))
+                build_let_env(seq.to_vec(), env)
+                    .ok_or(EvaluationError::Message("could not build let env".to_string()))
+                    .and_then(|env| eval_sequence(body, env))
             } else {
-                None
+                Err(EvaluationError::Message("wrong type!".to_string()))
             }
         })
 }
@@ -153,16 +173,16 @@ fn build_let_env(bindings: Vec<Ast>, env: Env) -> Option<Env> {
             _ => unreachable!(),
         };
 
-        if let Some(val) = eval(&pair[1], env.clone()) {
+        if let Some(val) = eval(&pair[1], env.clone()).ok() {
             env.borrow_mut().set(key, val);
         }
     }
     Some(env)
 }
 
-fn eval_lambda(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+fn eval_lambda(seq: Vec<Ast>, env: Env) -> EvaluationResult {
     if seq.len() < 2 {
-        return None;
+        return Err(EvaluationError::Message("wrong arity".to_string()));
     }
 
     let params = match seq[0] {
@@ -172,52 +192,54 @@ fn eval_lambda(seq: Vec<Ast>, env: Env) -> Option<Ast> {
 
     let body = seq[1..].to_vec();
 
-    Ast::Lambda {
+    Ok(Ast::Lambda {
             params: params,
             body: body,
             env: env,
             is_macro: false,
-        }
-        .into()
+        })
 }
 
 // guest eval
-fn eval_eval(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+fn eval_eval(seq: Vec<Ast>, env: Env) -> EvaluationResult {
     // grab reference to root env in case we are
     // `eval`ing inside a temporary env (e.g. lambda, let)
     let root_env = root(&env);
 
     seq.first()
+        .ok_or(EvaluationError::Message("wrong arity".to_string()))
         .and_then(|arg| eval(arg, root_env.clone()))
 }
 
 
 // for debugging
-fn eval_env(env: Env) -> Option<Ast> {
+fn eval_env(env: Env) -> EvaluationResult {
     env.borrow().inspect();
-    Ast::Nil.into()
+    Ok(Ast::Nil)
 }
 
 
-fn eval_quote(seq: Vec<Ast>) -> Option<Ast> {
+fn eval_quote(seq: Vec<Ast>) -> EvaluationResult {
     seq.first()
-        .and_then(|quoted| quoted.clone().into())
+        .ok_or(EvaluationError::Message("wrong arity".to_string()))
+        .and_then(|quoted| Ok(quoted.clone()))
 }
 
-fn eval_quasiquote(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+fn eval_quasiquote(seq: Vec<Ast>, env: Env) -> EvaluationResult {
     seq.first()
+        .ok_or(EvaluationError::Message("wrong arity".to_string()))
         .and_then(|arg| eval_quasiquote_for(arg, env.clone()))
         .and_then(|ast| eval(&ast, env))
 }
 
-fn eval_quasiquote_for(arg: &Ast, env: Env) -> Option<Ast> {
+fn eval_quasiquote_for(arg: &Ast, env: Env) -> EvaluationResult {
     let arg_elems = match *arg {
         Ast::List(ref seq) if !seq.is_empty() => seq.to_vec(),
         _ => {
             let mut result: Vec<Ast> = vec![];
             result.push(Ast::Symbol("quote".to_string()));
             result.push(arg.clone());
-            return Ast::List(result).into();
+            return Ok(Ast::List(result));
         }
     };
 
@@ -225,9 +247,9 @@ fn eval_quasiquote_for(arg: &Ast, env: Env) -> Option<Ast> {
     match *first {
         Ast::Symbol(ref s) if s == "unquote" => {
             if arg_elems.len() >= 2 {
-                arg_elems[1].clone().into()
+                Ok(arg_elems[1].clone())
             } else {
-                None
+                Err(EvaluationError::WrongArity(arg.clone()))
             }
         }
         Ast::List(ref seq) if !seq.is_empty() => {
@@ -246,8 +268,8 @@ fn eval_quasiquote_for(arg: &Ast, env: Env) -> Option<Ast> {
 
                                     eval_quasiquote_for(&next, env.clone()).and_then(|vals| {
                                         result.push(vals);
-                                        Ast::List(result).into()
-                                    })
+                                        Ok(Ast::List(result))
+                                    }).ok()
                                 })
                         }
                         _ => {
@@ -259,12 +281,12 @@ fn eval_quasiquote_for(arg: &Ast, env: Env) -> Option<Ast> {
                                     result.push(Ast::Symbol("cons".to_string()));
                                     result.push(first.clone());
                                     result.push(second.clone());
-                                    Ast::List(result).into()
+                                    Ok(Ast::List(result))
                                 })
-                            })
+                            }).ok() // TODO -- do not lose errors
                         }
                     }
-                })
+                }).ok_or(EvaluationError::BadArguments(arg.clone()))
         }
         _ => {
             eval_quasiquote_for(&arg_elems[0], env.clone()).and_then(|first| {
@@ -275,7 +297,7 @@ fn eval_quasiquote_for(arg: &Ast, env: Env) -> Option<Ast> {
                     result.push(Ast::Symbol("cons".to_string()));
                     result.push(first.clone());
                     result.push(second.clone());
-                    Ast::List(result).into()
+                    Ok(Ast::List(result))
                 })
             })
         }
@@ -283,9 +305,9 @@ fn eval_quasiquote_for(arg: &Ast, env: Env) -> Option<Ast> {
 }
 
 
-fn eval_macro(seq: Vec<Ast>, env: Env) -> Option<Ast> {
+fn eval_macro(seq: Vec<Ast>, env: Env) -> EvaluationResult {
     if seq.len() < 2 {
-        return None;
+        return Err(error_message("not enough arguments in call to defmacro!"));
     }
 
     let n = match seq[0] {
@@ -304,9 +326,9 @@ fn eval_macro(seq: Vec<Ast>, env: Env) -> Option<Ast> {
                     is_macro: true,
                 };
                 env.borrow_mut().set(n, new_f.clone());
-                Some(new_f)
+                Ok(new_f)
             }
-            _ => None,
+            _ => Err(EvaluationError::Message("Could not eval macro".to_string())),
         }
     })
 }
@@ -337,7 +359,7 @@ fn is_macro_call(ast: &Ast, env: Env) -> bool {
     }
 }
 
-fn macroexpand(ast: &Ast, env: Env) -> Option<Ast> {
+fn macroexpand(ast: &Ast, env: Env) -> EvaluationResult {
     let mut result = ast.clone();
     while is_macro_call(&result, env.clone()) {
         let expansion = match result {
@@ -345,30 +367,30 @@ fn macroexpand(ast: &Ast, env: Env) -> Option<Ast> {
                 // using invariants of is_macro_call to skip some checks here
                 match seq[0] {
                     Ast::Symbol(ref s) => {
-                        let ast = match env.borrow().get(s) {
-                            Some(ast) => ast.clone().into(),
-                            None => None,
-                        };
-                        if let Some(ast) = ast {
-                            apply(&ast, eval_ops(seq[1..].to_vec(), env.clone()), env.clone())
-                        } else {
-                            None
-                        }
+                        env.borrow().get(s)
+                            .ok_or(EvaluationError::Message("macroexpand: missing symbol".to_string()))
+                            .and_then(|ast| {
+                                apply(&ast, eval_ops(seq[1..].to_vec(), env.clone()), env.clone())
+                            })
                     }
-                    _ => None,
+                    _ => Err(EvaluationError::BadArguments(ast.clone())),
                 }
             }
-            _ => None,
+            _ => Err(EvaluationError::BadArguments(ast.clone())),
         };
-        if let Some(val) = expansion {
-            result = val;
-        } else {
-            return None;
+        match expansion {
+            Ok(val) => {
+                result = val
+            },
+            Err(e) => return Err(e)
         }
     }
-    result.into()
+    Ok(result)
 }
 
-fn eval_macroexpand(seq: Vec<Ast>, env: Env) -> Option<Ast> {
-    seq.first().and_then(|ast| macroexpand(ast, env))
+fn eval_macroexpand(seq: Vec<Ast>, env: Env) -> EvaluationResult {
+    seq.first()
+        .ok_or(error_message("not enough args in call to macroexpand"))
+        .and_then(|ast| macroexpand(ast, env))
+        .or(Err(error_message("could not eval macroexpand")))
 }
