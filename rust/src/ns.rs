@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::result::Result;
 use types::{Ast, HostFn, EvaluationResult};
 use error::{error_message, ReaderError, EvaluationError};
 use printer;
@@ -85,6 +86,8 @@ pub fn core() -> Ns {
                                                      ("nth", nth),
                                                      ("first", first),
                                                      ("rest", rest),
+                                                     ("apply", apply),
+                                                     ("map", map),
     ];
     let bindings = mappings.iter()
         .map(|&(k, v)| (k.to_string(), Ast::Fn(v)))
@@ -110,13 +113,18 @@ fn fold_first<F>(seq: Vec<Ast>, f: F) -> EvaluationResult
     where F: Fn(Ast, Ast) -> Ast
 {
     seq.split_first()
+        .ok_or(error_message("not enough args to op"))
         .and_then(|(first, rest)| {
+            if rest.len() == 0 {
+                return Err(error_message("not enough args to op"))
+            }
+
             let result = rest.iter()
                 .map(|a| a.clone())
                 .fold(first.clone(), f);
-            Some(result)
+
+            Ok(result)
         })
-        .ok_or(error_message("could not calculate op on seq"))
 }
 
 fn add(seq: Vec<Ast>) -> EvaluationResult {
@@ -407,3 +415,95 @@ fn rest(args: Vec<Ast>) -> EvaluationResult {
         }
     }).ok_or(error_message("call to rest failed"))
 }
+
+
+// apply: takes at least two arguments. The first argument is a function and the last argument is list (or vector). The arguments between the function and the last argument (if there are any) are concatenated with the final argument to create the arguments that are used to call the function. The apply function allows a function to be called with arguments that are contained in a list (or vector). In other words, (apply F A B [C D]) is equivalent to (F A B C D).
+fn apply(args: Vec<Ast>) -> EvaluationResult {
+    let len = args.len();
+    if len < 2 {
+        return Err(EvaluationError::WrongArity(Ast::Nil)) // fix argument here
+    }
+
+    let f = &args[0];
+    match f {
+        &Ast::Lambda{
+            ref env,
+            ..
+        } => {
+            flatten_last(args[1..].to_vec())
+                .and_then(|mut args| {
+                    let mut app = vec![f.clone()];
+                    app.append(&mut args);
+                    eval(&Ast::List(app), env.clone())
+                })
+        },
+        &Ast::Fn(f) => {
+            flatten_last(args[1..].to_vec())
+                .and_then(|args| {
+                    f(args)
+                })
+        }
+        _ => Err(error_message("expected first argument to apply to be a function"))
+    }
+}
+
+// flatten_last returns a vector of elements where each nested element in the last arg in args has been appended to the other arguments in args.
+fn flatten_last(args: Vec<Ast>) -> Result<Vec<Ast>, EvaluationError> {
+    let mut result = vec![];
+    let len = args.len();
+    for (i, arg) in args.iter().enumerate() {
+        if i == len - 1 {
+            match arg {
+                &Ast::List(ref seq) => {
+                    for s in seq.iter() {
+                        result.push(s.clone());
+                    }
+                },
+                _ => return Err(error_message("last argument to apply must be a list"))
+            }
+            continue
+        }
+
+        result.push(arg.clone());
+    }
+    Ok(result)
+}
+
+//        map: takes a function and a list (or vector) and evaluates the function against every element of the list (or vector) one at a time and returns the results as a list.
+// (map f xs)
+fn map(args: Vec<Ast>) -> EvaluationResult {
+    args.split_first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|(f, rest)| {
+            rest.split_first()
+                .ok_or(error_message("wrong arity"))
+                .and_then(|(xs, _)| {
+            match f {
+                &Ast::Lambda{
+                    ref env,
+                    ..
+                } => {
+                    match xs {
+                        &Ast::List(ref xs) => {
+                            let mut fxs = vec![];
+                            for x in xs.iter() {
+                                let app = Ast::List(vec![f.clone(), x.clone()]);
+                                let fx = eval(&app, env.clone());
+                                match fx {
+                                    Ok(fx) => {
+                                        fxs.push(fx);
+                                    },
+                                    Err(e) => return Err(e)
+                                }
+                            }
+                            Ok(Ast::List(fxs))
+                        },
+                        _ => Err(error_message("expected second argument to map to be a list or vector"))
+                    }
+                },
+                _ => Err(error_message("expected first argument to map to be a lambda value"))
+            }
+                })
+        })
+}
+
