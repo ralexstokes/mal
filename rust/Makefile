@@ -11,6 +11,9 @@ BINS = $(SRCS:%.rs=target/release/%)
 
 all: $(BINS)
 
+build:
+	cargo build
+
 run:
 	cargo run --bin main
 
