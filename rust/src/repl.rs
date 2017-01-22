@@ -4,8 +4,8 @@ use printer::print;
 use eval::eval;
 use env;
 use prelude;
-use types::{Ast, EvaluationResult};
-use error::{Error, ReplError, error_message};
+use types::Ast;
+use error::{Error, ReplError};
 
 pub struct Repl {
     reader: Reader,

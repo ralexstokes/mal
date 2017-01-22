@@ -8,6 +8,7 @@ pub enum EvaluationError {
     BadArguments(Ast),
     MissingSymbol(String),
     Message(String),
+    Exception(Ast),
 }
 
 impl From<EvaluationError> for Error {
@@ -31,6 +32,7 @@ impl fmt::Display for EvaluationError {
             }
             EvaluationError::Message(ref s) => write!(f, "{}", s),
             EvaluationError::MissingSymbol(ref s) => write!(f, "unbound symbol: {}", s),
+            EvaluationError::Exception(_) => unreachable!(),
         }
     }
 }

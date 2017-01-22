@@ -5,6 +5,7 @@ use printer;
 use reader;
 use std::io::Read;
 use std::fs::File;
+use eval::eval;
 
 pub type Ns = HashMap<String, Ast>;
 
