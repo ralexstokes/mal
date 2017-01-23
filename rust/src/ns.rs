@@ -88,6 +88,10 @@ pub fn core() -> Ns {
                                                      ("rest", rest),
                                                      ("apply", apply),
                                                      ("map", map),
+                                                     ("nil?", is_nil),
+                                                     ("true?", is_true),
+                                                     ("false?", is_false),
+                                                     ("symbol?", is_symbol),
     ];
     let bindings = mappings.iter()
         .map(|&(k, v)| (k.to_string(), Ast::Fn(v)))
@@ -507,3 +511,50 @@ fn map(args: Vec<Ast>) -> EvaluationResult {
         })
 }
 
+// nil?: takes a single argument and returns true (mal true value) if the argument is nil (mal nil value).
+fn is_nil(args: Vec<Ast>) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|arg| {
+            match *arg {
+                Ast::Nil => Ok(Ast::Boolean(true)),
+                _ => Ok(Ast::Boolean(false)),
+            }
+        })
+}
+
+// true?: takes a single argument and returns true (mal true value) if the argument is a true value (mal true value).
+fn is_true(args: Vec<Ast>) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|arg| {
+            match *arg {
+                Ast::Boolean(true) => Ok(Ast::Boolean(true)),
+                _ => Ok(Ast::Boolean(false)),
+            }
+        })
+}
+
+// false?: takes a single argument and returns true (mal true value) if the argument is a false value (mal false value).
+fn is_false(args: Vec<Ast>) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|arg| {
+            match *arg {
+                Ast::Boolean(false) => Ok(Ast::Boolean(true)),
+                _ => Ok(Ast::Boolean(false)),
+            }
+        })
+}
+
+// symbol?: takes a single argument and returns true (mal true value) if the argument is a symbol (mal symbol value).
+fn is_symbol(args: Vec<Ast>) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|arg| {
+            match *arg {
+                Ast::Symbol(_) => Ok(Ast::Boolean(true)),
+                _ => Ok(Ast::Boolean(false)),
+            }
+        })
+}
