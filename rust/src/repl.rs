@@ -5,7 +5,7 @@ use eval::eval;
 use env;
 use prelude;
 use types::Ast;
-use error::{Error, ReplError};
+use error::{Error, ReplError, ReaderError};
 
 pub struct Repl {
     reader: Reader,
@@ -65,7 +65,10 @@ impl Repl {
             match self.rep_from_reader(env.clone()) {
                 Ok(result) => println!("{}", result),
                 Err(Error::ReaderError(e)) => {
-                    println!("{}", e);
+                    match e {
+                        ReaderError::Message(ref s) => println!("{}", s),
+                        ReaderError::EmptyInput => {}
+                    }
                 }
                 Err(Error::EvaluationError(e)) => {
                     println!("{}", e);

@@ -40,12 +40,14 @@ impl fmt::Display for EvaluationError {
 #[derive(Debug)]
 pub enum ReaderError {
     Message(String),
+    EmptyInput,
 }
 
 impl fmt::Display for ReaderError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             ReaderError::Message(ref s) => write!(f, "{}", s),
+            ReaderError::EmptyInput => Ok(()),
         }
     }
 }

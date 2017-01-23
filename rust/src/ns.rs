@@ -294,6 +294,9 @@ fn read_string(args: Vec<Ast>) -> EvaluationResult {
                                 ReaderError::Message(s) => {
                                     EvaluationError::Message(s)
                                 }
+                                ReaderError::EmptyInput => {
+                                    EvaluationError::Message("input was empty".into())
+                                }
                             }
                         })
                 },

@@ -182,6 +182,10 @@ fn read_form(reader: &mut Reader) -> ReaderResult {
                             result = Ok(Ast::List(seq))
                         }
                     }
+                    "" => {
+                        result = Err(ReaderError::EmptyInput);
+                        break;
+                    }
                     _ => {
                         result = read_atom(reader);
                     }
