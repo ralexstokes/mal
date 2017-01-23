@@ -50,7 +50,7 @@ impl Repl {
             if let Some(result) = result {
                 match result {
                     Ok(result) => println!("{}", result),
-                    Err(Error::EvaluationError(msg)) => println!("{}", msg),
+                    Err(Error::EvaluationError(e)) => self.reader.write_err(e.to_string()),
                     _ => {}
                 }
             }
@@ -66,17 +66,15 @@ impl Repl {
                 Ok(result) => println!("{}", result),
                 Err(Error::ReaderError(e)) => {
                     match e {
-                        ReaderError::Message(ref s) => println!("{}", s),
+                        ReaderError::Message(s) => self.reader.write_err(s),
                         ReaderError::EmptyInput => {}
                     }
                 }
-                Err(Error::EvaluationError(e)) => {
-                    println!("{}", e);
-                }
+                Err(Error::EvaluationError(e)) => self.reader.write_err(e.to_string()),
                 Err(Error::ReplError(e)) => {
                     match e {
                         ReplError::EmptyOutput => continue,
-                        ReplError::EvalError(msg) => println!("{}", msg),
+                        ReplError::EvalError(msg) => self.reader.write_err(msg),
                         ReplError::EOF => break,
                     }
                 }
