@@ -1,4 +1,5 @@
 use types::{Ast, EvaluationResult};
+use std::result::Result;
 use error::{error_message, EvaluationError};
 use ns;
 use env::{Env, empty_from, new, root};
@@ -29,8 +30,8 @@ const QUASIQUOTE_FORM: &'static str = "quasiquote";
 const MACRO_FORM: &'static str = "defmacro!";
 const MACROEXPAND_FORM: &'static str = "macroexpand";
 const TRY_FORM: &'static str = "try*";
-const THROW_FORM: &'static str = "throw";
 const CATCH_FORM: &'static str = "catch*";
+
 
 fn eval_list(seq: Vec<Ast>, env: Env) -> EvaluationResult {
     if seq.is_empty() {
@@ -41,49 +42,50 @@ fn eval_list(seq: Vec<Ast>, env: Env) -> EvaluationResult {
         .ok_or(EvaluationError::Message("could not split list to eval".to_string()))
         .and_then(|(operator, operands)| {
             match *operator {
-                Ast::Symbol(ref s) => {
-                    match s.as_str() {
-                        IF_FORM => eval_if(operands.to_vec(), env),
-                        SEQUENCE_FORM => eval_sequence(operands.to_vec(), env),
-                        DEFINE_FORM => eval_define(operands.to_vec(), env),
-                        LET_FORM => eval_let(operands.to_vec(), env),
-                        LAMBDA_FORM => eval_lambda(operands.to_vec(), env),
-                        EVAL_FORM => eval_eval(eval_ops(operands.to_vec(), env.clone()), env),
-                        ENV_FORM => eval_env(env),
-                        QUOTE_FORM => eval_quote(operands.to_vec()),
-                        QUASIQUOTE_FORM => eval_quasiquote(operands.to_vec(), env),
-                        MACRO_FORM => eval_macro(operands.to_vec(), env),
-                        MACROEXPAND_FORM => eval_macroexpand(operands.to_vec(), env),
-                        TRY_FORM => eval_try(operands.to_vec(), env),
-                        THROW_FORM => eval_throw(operands.to_vec()),
-                        _ => apply(operator, eval_ops(operands.to_vec(), env.clone()), env),
-                    }
+                Ast::Symbol(ref s) if s == IF_FORM => eval_if(operands.to_vec(), env),
+                Ast::Symbol(ref s) if s == SEQUENCE_FORM => eval_sequence(operands.to_vec(), env),
+                Ast::Symbol(ref s) if s == DEFINE_FORM => eval_define(operands.to_vec(), env),
+                Ast::Symbol(ref s) if s == LET_FORM => eval_let(operands.to_vec(), env),
+                Ast::Symbol(ref s) if s == LAMBDA_FORM => eval_lambda(operands.to_vec(), env),
+                Ast::Symbol(ref s) if s == EVAL_FORM => eval_eval(operands.to_vec(), env),
+                Ast::Symbol(ref s) if s == ENV_FORM => eval_env(env),
+                Ast::Symbol(ref s) if s == QUOTE_FORM => eval_quote(operands.to_vec()),
+                Ast::Symbol(ref s) if s == QUASIQUOTE_FORM => {
+                    eval_quasiquote(operands.to_vec(), env)
                 }
-                _ => apply(operator, eval_ops(operands.to_vec(), env.clone()), env),
+                Ast::Symbol(ref s) if s == MACRO_FORM => eval_macro(operands.to_vec(), env),
+                Ast::Symbol(ref s) if s == MACROEXPAND_FORM => {
+                    eval_macroexpand(operands.to_vec(), env)
+                }
+                Ast::Symbol(ref s) if s == TRY_FORM => eval_try(operands.to_vec(), env),
+                _ => apply(operator, operands.to_vec(), env),
             }
         })
 }
 
-fn eval_ops(operands: Vec<Ast>, env: Env) -> Vec<Ast> {
-    operands.iter()
-        .map(|operand| eval(operand, env.clone()))
-        .filter(|operand| operand.is_ok())
-        .map(|operand| operand.unwrap())
-        .collect::<Vec<_>>()
+fn eval_ops(operands: Vec<Ast>, env: Env) -> Result<Vec<Ast>, EvaluationError> {
+    let mut result = vec![];
+    for operand in operands.iter() {
+        let evop = try!(eval(operand, env.clone()));
+        result.push(evop);
+    }
+    Ok(result)
 }
 
-fn apply(operator: &Ast, evops: Vec<Ast>, env: Env) -> EvaluationResult {
-    eval(operator, env.clone()).and_then(|evop| {
-        match evop {
-            Ast::Lambda { params, body, env, .. } => {
-                let ns = ns::new_from(params, evops);
-                let new_env = new(Some(env.clone()), ns);
+fn apply(operator: &Ast, operands: Vec<Ast>, env: Env) -> EvaluationResult {
+    eval_ops(operands, env.clone()).and_then(|evops| {
+        eval(operator, env.clone()).and_then(|evop| {
+            match evop {
+                Ast::Lambda { params, body, env, .. } => {
+                    let ns = ns::new_from(params, evops);
+                    let new_env = new(Some(env.clone()), ns);
 
-                eval_sequence(body, new_env)
+                    eval_sequence(body, new_env)
+                }
+                Ast::Fn(f) => f(evops.to_vec()),
+                _ => unreachable!(),
             }
-            Ast::Fn(f) => f(evops.to_vec()),
-            _ => unreachable!(),
-        }
+        })
     })
 }
 
@@ -202,13 +204,15 @@ fn eval_lambda(seq: Vec<Ast>, env: Env) -> EvaluationResult {
 
 // guest eval
 fn eval_eval(seq: Vec<Ast>, env: Env) -> EvaluationResult {
-    // grab reference to root env in case we are
-    // `eval`ing inside a temporary env (e.g. lambda, let)
-    let root_env = root(&env);
+    eval_ops(seq, env.clone()).and_then(|seq| {
+        // grab reference to root env in case we are
+        // `eval`ing inside a temporary env (e.g. lambda, let)
+        let root_env = root(&env);
 
-    seq.first()
-        .ok_or(EvaluationError::Message("wrong arity".to_string()))
-        .and_then(|arg| eval(arg, root_env.clone()))
+        seq.first()
+            .ok_or(EvaluationError::Message("wrong arity".to_string()))
+            .and_then(|arg| eval(arg, root_env.clone()))
+    })
 }
 
 
@@ -376,9 +380,7 @@ fn macroexpand(ast: &Ast, env: Env) -> EvaluationResult {
                             .get(s)
                             .ok_or(EvaluationError::Message("macroexpand: missing symbol"
                                 .to_string()))
-                            .and_then(|ast| {
-                                apply(&ast, eval_ops(seq[1..].to_vec(), env.clone()), env.clone())
-                            })
+                            .and_then(|ast| apply(&ast, seq[1..].to_vec(), env.clone()))
                     }
                     _ => Err(EvaluationError::BadArguments(ast.clone())),
                 }
@@ -408,23 +410,12 @@ fn eval_try(seq: Vec<Ast>, env: Env) -> EvaluationResult {
     let handler = &seq[1];
 
     let result = eval(body, env.clone());
-    if let Ok(Ast::Exception(exn)) = result {
+    if let Err(EvaluationError::Exception(exn)) = result {
         eval_catch(handler, env.clone()) // will map catch form to lambda
-            .and_then(|handler| eval_exception(handler, *exn.clone(), env))
+            .and_then(|handler| eval_exception(handler, exn.clone(), env))
     } else {
-        return result;
+        result
     }
-}
-
-fn eval_throw(seq: Vec<Ast>) -> EvaluationResult {
-    let val = if seq.len() == 0 {
-        // TODO want to support niladic throw?
-        Ast::Nil
-    } else {
-        seq[0].clone()
-    };
-
-    Ok(Ast::Exception(Box::new(val)))
 }
 
 // eval_catch builds a lambda from the given exception handler

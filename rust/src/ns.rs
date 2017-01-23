@@ -86,6 +86,7 @@ pub fn core() -> Ns {
                                                      ("nth", nth),
                                                      ("first", first),
                                                      ("rest", rest),
+                                                     ("throw", throw),
                                                      ("apply", apply),
                                                      ("map", map),
                                                      ("nil?", is_nil),
@@ -420,6 +421,18 @@ fn rest(args: Vec<Ast>) -> EvaluationResult {
     }).ok_or(error_message("call to rest failed"))
 }
 
+// throw: wraps its argument in an exception
+fn throw(args: Vec<Ast>) -> EvaluationResult {
+    // println!("evaling throw: {:?}", args);
+    let val = if args.len() == 0 {
+        Ast::Nil
+    } else {
+        args[0].clone()
+    };
+
+    Err(EvaluationError::Exception((val)))
+}
+
 
 // apply: takes at least two arguments. The first argument is a function and the last argument is list (or vector). The arguments between the function and the last argument (if there are any) are concatenated with the final argument to create the arguments that are used to call the function. The apply function allows a function to be called with arguments that are contained in a list (or vector). In other words, (apply F A B [C D]) is equivalent to (F A B C D).
 fn apply(args: Vec<Ast>) -> EvaluationResult {
@@ -477,10 +490,10 @@ fn flatten_last(args: Vec<Ast>) -> Result<Vec<Ast>, EvaluationError> {
 // (map f xs)
 fn map(args: Vec<Ast>) -> EvaluationResult {
     args.split_first()
-        .ok_or(error_message("wrong arity"))
+        .ok_or(error_message("wrong arity to map -- missing first arg"))
         .and_then(|(f, rest)| {
             rest.split_first()
-                .ok_or(error_message("wrong arity"))
+                .ok_or(error_message("wrong arity to map -- missing rest args"))
                 .and_then(|(xs, _)| {
             match f {
                 &Ast::Lambda{
@@ -492,19 +505,27 @@ fn map(args: Vec<Ast>) -> EvaluationResult {
                             let mut fxs = vec![];
                             for x in xs.iter() {
                                 let app = Ast::List(vec![f.clone(), x.clone()]);
-                                let fx = eval(&app, env.clone());
-                                match fx {
-                                    Ok(fx) => {
-                                        fxs.push(fx);
-                                    },
-                                    Err(e) => return Err(e)
-                                }
+                                let fx = try!(eval(&app, env.clone()));
+                                fxs.push(fx);
                             }
                             Ok(Ast::List(fxs))
                         },
                         _ => Err(error_message("expected second argument to map to be a list or vector"))
                     }
                 },
+                &Ast::Fn(f) => {
+                    match xs {
+                        &Ast::List(ref xs) => {
+                            let mut fxs = vec![];
+                            for x in xs.iter() {
+                                let fx = try!(f(vec![x.clone()]));
+                                fxs.push(fx);
+                            }
+                            Ok(Ast::List(fxs))
+                        },
+                        _ => Err(error_message("expected second argument to map to be a list or vector"))
+                    }
+                }
                 _ => Err(error_message("expected first argument to map to be a lambda value"))
             }
                 })

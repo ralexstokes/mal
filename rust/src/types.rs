@@ -23,7 +23,6 @@ pub enum Ast {
     },
     Fn(HostFn),
     List(Vec<Ast>),
-    Exception(Box<Ast>),
 }
 
 impl fmt::Display for Ast {

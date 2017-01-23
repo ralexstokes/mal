@@ -33,7 +33,6 @@ pub fn pr_str(ast: &Ast, readably: bool) -> String {
             }
         }
         Ast::Fn(_) => "#<host-fn>".to_string(),
-        Ast::Exception(_) => "#<exception>".to_string(),
     }
 }
 
