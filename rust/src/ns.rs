@@ -6,7 +6,7 @@ use printer;
 use reader;
 use std::io::Read;
 use std::fs::File;
-use eval::eval;
+use eval::{eval, apply_lambda};
 
 pub type Ns = HashMap<String, Ast>;
 
@@ -489,7 +489,7 @@ fn flatten_last(args: Vec<Ast>) -> Result<Vec<Ast>, EvaluationError> {
     Ok(result)
 }
 
-//        map: takes a function and a list (or vector) and evaluates the function against every element of the list (or vector) one at a time and returns the results as a list.
+// map: takes a function and a list (or vector) and evaluates the function against every element of the list (or vector) one at a time and returns the results as a list.
 // (map f xs)
 fn map(args: Vec<Ast>) -> EvaluationResult {
     args.split_first()
@@ -500,6 +500,8 @@ fn map(args: Vec<Ast>) -> EvaluationResult {
                 .and_then(|(xs, _)| {
             match f {
                 &Ast::Lambda{
+                    ref params,
+                    ref body,
                     ref env,
                     ..
                 } => {
@@ -507,8 +509,11 @@ fn map(args: Vec<Ast>) -> EvaluationResult {
                         &Ast::List(ref xs) => {
                             let mut fxs = vec![];
                             for x in xs.iter() {
-                                let app = Ast::List(vec![f.clone(), x.clone()]);
-                                let fx = try!(eval(&app, env.clone()));
+                                let args = vec![x.clone()];
+                                let fx = try!(apply_lambda(params.clone(),
+                                                           body.clone(),
+                                                           env.clone(),
+                                                           args));
                                 fxs.push(fx);
                             }
                             Ok(Ast::List(fxs))

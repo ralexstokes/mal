@@ -77,16 +77,24 @@ fn apply(operator: &Ast, operands: Vec<Ast>, env: Env) -> EvaluationResult {
         eval(operator, env.clone()).and_then(|evop| {
             match evop {
                 Ast::Lambda { params, body, env, .. } => {
-                    let ns = ns::new_from(params, evops);
-                    let new_env = new(Some(env.clone()), ns);
-
-                    eval_sequence(body, new_env)
+                    apply_lambda(params, body, env, evops.to_vec())
                 }
                 Ast::Fn(f) => f(evops.to_vec()),
                 _ => unreachable!(),
             }
         })
     })
+}
+
+pub fn apply_lambda(params: Vec<Ast>,
+                    body: Vec<Ast>,
+                    env: Env,
+                    evops: Vec<Ast>)
+                    -> EvaluationResult {
+    let ns = ns::new_from(params, evops);
+    let new_env = new(Some(env.clone()), ns);
+
+    eval_sequence(body, new_env)
 }
 
 fn eval_sequence(seq: Vec<Ast>, env: Env) -> EvaluationResult {
