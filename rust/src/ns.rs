@@ -7,6 +7,7 @@ use reader;
 use std::io::Read;
 use std::fs::File;
 use eval::{eval, apply_lambda};
+use readline;
 
 pub type Ns = HashMap<String, Ast>;
 
@@ -93,6 +94,7 @@ pub fn core() -> Ns {
                                                      ("true?", is_true),
                                                      ("false?", is_false),
                                                      ("symbol?", is_symbol),
+                                                     ("readline", readline),
     ];
     let bindings = mappings.iter()
         .map(|&(k, v)| (k.to_string(), Ast::Fn(v)))
@@ -584,6 +586,25 @@ fn is_symbol(args: Vec<Ast>) -> EvaluationResult {
             match *arg {
                 Ast::Symbol(_) => Ok(Ast::Boolean(true)),
                 _ => Ok(Ast::Boolean(false)),
+            }
+        })
+}
+
+// readline takes a string that is used to prompt the user for input. The line of text entered by the user is returned as a string. If the user sends an end-of-file (usually Ctrl-D), then nil is returned.
+fn readline(args: Vec<Ast>) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("not enough arguments to readline"))
+        .and_then(|arg| {
+            match *arg {
+                Ast::String(ref s) => {
+                    let mut rdr = readline::Reader::new(s.clone());
+                    let result = match rdr.read() {
+                        Some(line) => Ast::String(line.clone()),
+                        None => Ast::Nil,
+                    };
+                    Ok(result)
+                },
+                _ => Err(error_message("wrong type of argument to readline"))
             }
         })
 }

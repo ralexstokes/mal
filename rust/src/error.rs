@@ -65,6 +65,16 @@ pub enum ReplError {
     EOF,
 }
 
+impl fmt::Display for ReplError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ReplError::EmptyOutput => Ok(()),
+            ReplError::EvalError(ref s) => write!(f, "{}", s),
+            ReplError::EOF => Ok(()),
+        }
+    }
+}
+
 impl From<ReplError> for Error {
     fn from(err: ReplError) -> Error {
         Error::ReplError(err)

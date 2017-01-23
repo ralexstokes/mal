@@ -14,6 +14,7 @@ pub struct Repl {
 pub type ReplResult = ::std::result::Result<String, Error>;
 
 const ARGV_SYMBOL: &'static str = "*ARGV*";
+const GREETING_FORM: &'static str = "(println (str \"Mal [\" *host-language* \"]\"))";
 
 impl Repl {
     pub fn new(prompt: String) -> Repl {
@@ -23,9 +24,8 @@ impl Repl {
     pub fn run(&mut self) {
         let env = env::core();
 
-        let mut pretext: Option<String> = None;
         match prelude::load(self, env.clone()) {
-            Ok(msg) => pretext = msg.clone().into(),
+            Ok(_) => {}
             Err(Error::ReplError(e)) => {
                 match e {
                     ReplError::EmptyOutput => {}
@@ -33,7 +33,8 @@ impl Repl {
                     ReplError::EOF => unreachable!(),
                 }
             }
-            _ => unreachable!(),
+            Err(Error::EvaluationError(e)) => self.reader.write_err(e.to_string()),
+            Err(Error::ReaderError(e)) => self.reader.write_err(e.to_string()),
         }
 
         let args = ::std::env::args().skip(1).collect::<Vec<_>>();
@@ -57,9 +58,7 @@ impl Repl {
             return;
         }
 
-        if let Some(msg) = pretext {
-            self.reader.write_ok(msg)
-        }
+        let _ = self.rep(GREETING_FORM.into(), env.clone());
 
         loop {
             match self.rep_from_reader(env.clone()) {
