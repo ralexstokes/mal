@@ -31,41 +31,27 @@ fn test_tokenizer() {
     }
 }
 
+#[derive(Debug,Clone)]
+pub enum Token {
+    OpenList,
+    CloseList,
+    Atom(String),
+    Comment,
+}
+
 fn token_from(capture: Captures) -> Token {
     // select 2nd capture that lacks whitespace
     let c = capture.at(1).unwrap();
 
-    Token {
-        typ: typ_for(c),
-        value: c.to_string(),
-    }
-}
-
-fn typ_for(c: &str) -> TokenType {
     if c.starts_with(';') {
-        return TokenType::Comment;
+        return Token::Comment;
     }
 
     match c {
-        "(" | "[" => TokenType::OpenList,
-        ")" | "]" => TokenType::CloseList,
-        _ => TokenType::Atom,
+        "(" | "[" => Token::OpenList,
+        ")" | "]" => Token::CloseList,
+        _ => Token::Atom(c.to_string()),
     }
-}
-
-#[derive(Debug,Clone)]
-pub enum TokenType {
-    OpenList,
-    CloseList,
-    Atom,
-    Comment,
-}
-
-
-#[derive(Debug,Clone)]
-pub struct Token {
-    typ: TokenType,
-    value: String,
 }
 
 #[derive(Debug)]
@@ -75,45 +61,13 @@ pub struct Reader {
     position: usize,
 }
 
-impl Iterator for Reader {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Token> {
-        let current_token = match self.current_token {
-            Some(_) => self.current_token.clone(),
-            None => return None,
-        };
-
-        self.position += 1;
-        if self.position < self.tokens.len() {
-            self.current_token = Some(self.tokens[self.position].clone())
-        } else {
-            self.current_token = None
-        }
-        current_token
-    }
-}
-
 impl Reader {
     fn new(tokens: Vec<Token>) -> Reader {
-        let current = tokens.first()
-            .map(|t| t.clone());
-
-        match current {
-            Some(_) => {
-                Reader {
-                    tokens: tokens,
-                    current_token: current,
-                    position: 0,
-                }
-            }
-            None => {
-                Reader {
-                    tokens: tokens,
-                    current_token: None,
-                    position: 0,
-                }
-            }
+        let current = tokens.first().map(|t| t.clone());
+        Reader {
+            tokens: tokens,
+            current_token: current,
+            position: 0,
         }
     }
 
@@ -133,6 +87,23 @@ fn test_reader() {
     }
 }
 
+impl Iterator for Reader {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Token> {
+        self.current_token.clone().and_then(|current| {
+            self.position += 1;
+            // change to vec::get() once we have moved to refs
+            if self.position < self.tokens.len() {
+                self.current_token = Some(self.tokens[self.position].clone())
+            } else {
+                self.current_token = None
+            }
+            current.into()
+        })
+    }
+}
+
 #[test]
 fn test_read_form() {
     let inputstr = r#"~@(a b c)"#;
@@ -143,45 +114,28 @@ fn test_read_form() {
     println!("{}", ast);
 }
 
+macro_rules! macroexpand {
+    ( $literal:expr, $reader:expr, $result:expr ) => {{
+        let mut seq = vec![Ast::Symbol($literal.to_string())];
+        let _ = $reader.next();
+        if let Ok(next) = read_form($reader) {
+            seq.push(next);
+            $result = Ok(Ast::List(seq));
+        }
+    }};
+}
+
 fn read_form(reader: &mut Reader) -> ReaderResult {
     let mut result: ReaderResult = Err(ReaderError::Message("could not read form".to_string()));
 
     while let Some(token) = reader.peek() {
-        match token.typ {
-            TokenType::Atom => {
-                match token.value.as_str() {
-                    "'" => {
-                        let mut seq = vec![Ast::Symbol("quote".to_string())];
-                        let _ = reader.next();
-                        if let Ok(next) = read_form(reader) {
-                            seq.push(next);
-                            result = Ok(Ast::List(seq));
-                        }
-                    }
-                    "`" => {
-                        let mut seq = vec![Ast::Symbol("quasiquote".to_string())];
-                        let _ = reader.next();
-                        if let Ok(next) = read_form(reader) {
-                            seq.push(next);
-                            result = Ok(Ast::List(seq))
-                        }
-                    }
-                    "~" => {
-                        let mut seq = vec![Ast::Symbol("unquote".to_string())];
-                        let _ = reader.next();
-                        if let Ok(next) = read_form(reader) {
-                            seq.push(next);
-                            result = Ok(Ast::List(seq))
-                        }
-                    }
-                    "~@" => {
-                        let mut seq = vec![Ast::Symbol("splice-unquote".to_string())];
-                        let _ = reader.next();
-                        if let Ok(next) = read_form(reader) {
-                            seq.push(next);
-                            result = Ok(Ast::List(seq))
-                        }
-                    }
+        match token {
+            Token::Atom(ref value) => {
+                match value.as_str() {
+                    "'" => macroexpand!("quote", reader, result),
+                    "`" => macroexpand!("quasiquote", reader, result),
+                    "~" => macroexpand!("unquote", reader, result),
+                    "~@" => macroexpand!("splice-unquote", reader, result),
                     "" => {
                         result = Err(ReaderError::EmptyInput);
                         break;
@@ -192,12 +146,12 @@ fn read_form(reader: &mut Reader) -> ReaderResult {
                 }
                 break;
             }
-            TokenType::OpenList => {
+            Token::OpenList => {
                 result = read_list(reader);
                 break;
             }
-            TokenType::CloseList => break,
-            TokenType::Comment => {
+            Token::CloseList => break,
+            Token::Comment => {
                 let _ = reader.next();
             }
         }
@@ -212,8 +166,8 @@ fn read_list(reader: &mut Reader) -> ReaderResult {
     let mut list: Vec<Ast> = vec![];
 
     while let Some(token) = reader.peek() {
-        match token.typ {
-            TokenType::CloseList => {
+        match token {
+            Token::CloseList => {
                 let _ = reader.next();
                 in_list = false;
                 break;
@@ -237,45 +191,49 @@ fn read_atom(reader: &mut Reader) -> ReaderResult {
     reader.next()
         .ok_or(ReaderError::Message("error missing tokens".to_string()))
         .and_then(|token| {
-            nil_from(&token)
-                .or(boolean_from(&token))
-                .or(number_from(&token))
-                .or(string_from(&token))
-                .or(symbol_from(&token))
+            match token {
+                Token::Atom(ref s) => {
+                    nil_from(s)
+                        .or(boolean_from(s))
+                        .or(number_from(s))
+                        .or(string_from(s))
+                        .or(symbol_from(s))
+                }
+                _ => {
+                    Err(ReaderError::Message("reader: trying to get atom from non-atom token"
+                        .to_string()))
+                }
+            }
         })
 }
 
-fn nil_from(token: &Token) -> ReaderResult {
-    match token.value.as_str() {
+fn nil_from(token: &str) -> ReaderResult {
+    match token {
             "nil" => Some(Ast::Nil),
             _ => None,
         }
         .ok_or(ReaderError::Message("could not parse nil".to_string()))
 }
 
-fn boolean_from(token: &Token) -> ReaderResult {
-    token.value
-        .parse::<bool>()
+fn boolean_from(token: &str) -> ReaderResult {
+    token.parse::<bool>()
         .map(|p| Ast::Boolean(p))
         .map_err(|_| ReaderError::Message("could not parse boolean from this token".to_string()))
 }
 
-fn number_from(token: &Token) -> ReaderResult {
-    token.value
-        .parse::<i64>()
+fn number_from(token: &str) -> ReaderResult {
+    token.parse::<i64>()
         .map(|n| Ast::Number(n))
         .map_err(|_| ReaderError::Message("could not parse number from this token".to_string()))
 }
 
-fn string_from(token: &Token) -> ReaderResult {
-    let s = &token.value;
-
+fn string_from(token: &str) -> ReaderResult {
     lazy_static! {
         static ref STRING: Regex = Regex::new(r#"^".*"$"#).unwrap();
     }
 
-    if STRING.is_match(s) {
-            let new_str = &s[1..s.len() - 1];
+    if STRING.is_match(token) {
+            let new_str = &token[1..token.len() - 1];
             Some(Ast::String(read_str(new_str)))
         } else {
             None
@@ -295,6 +253,6 @@ fn read_str(s: &str) -> String {
         .replace(r#"\\"#, "\\")
 }
 
-fn symbol_from(token: &Token) -> ReaderResult {
-    Ok(Ast::Symbol(token.value.clone()))
+fn symbol_from(token: &str) -> ReaderResult {
+    Ok(Ast::Symbol(token.to_string()))
 }
