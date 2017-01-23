@@ -1,3 +1,4 @@
+use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
 use types::Ast;
@@ -5,7 +6,6 @@ use ns;
 
 pub type Env = Rc<RefCell<EnvData>>;
 
-#[derive(Debug)]
 pub struct EnvData {
     bindings: ns::Ns,
     outer: Option<Env>,
@@ -59,6 +59,18 @@ impl EnvData {
                 println!("{} => {}", k, v);
             }
         }
+    }
+}
+
+impl fmt::Debug for EnvData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "<env>")
+    }
+}
+
+impl fmt::Display for EnvData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "<env>")
     }
 }
 
