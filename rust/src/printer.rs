@@ -33,6 +33,10 @@ pub fn pr_str(ast: &Ast, readably: bool) -> String {
             }
         }
         Ast::Fn(_) => "#<host-fn>".to_string(),
+        Ast::Atom(atom) => {
+            let inner = atom.borrow();
+            Some(format!("atom({})", inner.clone()))
+        }
     }
 }
 
