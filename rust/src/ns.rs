@@ -421,7 +421,7 @@ fn rest(args: Vec<Ast>) -> EvaluationResult {
                 let items = if seq.is_empty() {
                     vec![]
                 } else {
-                    seq[1..].to_vec()//.iter().map(|elem| elem.clone()).collect::<Vec<_>>()
+                    seq[1..].to_vec()
                 };
                 Ast::List(items).into()
             },
