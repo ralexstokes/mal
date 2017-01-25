@@ -684,7 +684,7 @@ fn swap(args: Vec<Ast>) -> Option<Ast> {
                         &Ast::Lambda{
                             ref env,
                             ..
-
+                        } => {
                             let val = atom.clone().into_inner();
                             let mut full_params = vec![*val];
                             full_params.append(&mut params.to_vec());
