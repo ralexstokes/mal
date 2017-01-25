@@ -229,13 +229,13 @@ fn nil_from(token: &str) -> ReaderResult {
 
 fn boolean_from(token: &str) -> ReaderResult {
     token.parse::<bool>()
-        .map(|p| Ast::Boolean(p))
+        .map(Ast::Boolean)
         .map_err(|_| ReaderError::Message("could not parse boolean from this token".to_string()))
 }
 
 fn number_from(token: &str) -> ReaderResult {
     token.parse::<i64>()
-        .map(|n| Ast::Number(n))
+        .map(Ast::Number)
         .map_err(|_| ReaderError::Message("could not parse number from this token".to_string()))
 }
 
