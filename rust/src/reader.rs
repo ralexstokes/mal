@@ -136,6 +136,7 @@ fn read_form(reader: &mut Reader) -> ReaderResult {
                     "`" => macroexpand!("quasiquote", reader, result),
                     "~" => macroexpand!("unquote", reader, result),
                     "~@" => macroexpand!("splice-unquote", reader, result),
+                    "@" => macroexpand!("deref", reader, result),
                     "" => {
                         result = Err(ReaderError::EmptyInput);
                         break;
@@ -154,18 +155,6 @@ fn read_form(reader: &mut Reader) -> ReaderResult {
             Token::Comment => {
                 let _ = reader.next();
             }
-            // TokenType::Sigil(sigil) => {
-            //     let _ = reader.next();
-            //     result = match sigil {
-            //         SigilType::AtomDeref => {
-            //             read_form(reader).and_then(|next| {
-            //                 let elems = vec![Ast::Symbol("deref".to_string()), next];
-            //                 Ast::List(elems).into()
-            //             })
-            //         }
-            //     };
-            //     break;
-            // }
         }
     }
     result
