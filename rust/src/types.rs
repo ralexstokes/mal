@@ -95,13 +95,13 @@ impl PartialEq for LispType {
         use types::LispType::*;
         match (self, other) {
             (&Nil, &Nil) => true,
-            (&Boolean(x), &Boolean(y)) if x == y => true,
-            (&String(ref s), &String(ref t)) if s == t => true,
-            (&Number(x), &Number(y)) if x == y => true,
-            (&Symbol(ref s), &Symbol(ref t)) if s == t => true,
+            (&Boolean(x), &Boolean(y)) => x == y,
+            (&String(ref s), &String(ref t)) => s == t,
+            (&Number(x), &Number(y)) => x == y,
             (&Keyword(ref s), &Keyword(ref t)) => s == t,
+            (&Symbol(ref s), &Symbol(ref t)) => s == t,
             (&Lambda { .. }, &Lambda { .. }) => false,
-            (&Fn(f), &Fn(g)) if f == g => true,
+            (&Fn(_), &Fn(_)) => false,
             (&List(ref xs), &List(ref ys)) => xs == ys,
             _ => false,
         }
