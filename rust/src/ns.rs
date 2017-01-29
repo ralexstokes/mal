@@ -655,56 +655,65 @@ fn deref(args: Seq) -> EvaluationResult {
 }
 
 // reset!: Takes an atom and a Mal value; the atom is modified to refer to the given Mal value. The Mal value is returned.
-fn reset(args: Vec<Ast>) -> Option<Ast> {
-    args.split_first().and_then(|(atom, rest)| {
-        rest.split_first().and_then(|(val, _)| {
-            println!("{:?}", val);
-            let newval = Box::new(val.clone());
-            println!("{:?}", newval);
-
-            match atom {
-                &Ast::Atom(ref atom) => {
-                    println!("{:?}", atom);
-                    let mut cell = atom.borrow_mut();
-                    let oldval = (*cell).clone();
-                    *cell = newval;
-                    println!("{:?}", cell);
-                    Some(*oldval)
-                }
-                _ => None,
-            }
+fn reset(args: Seq) -> EvaluationResult {
+    args.split_first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|(atom, rest)| {
+            rest.split_first()
+                .ok_or(error_message("wrong arity"))
+                .and_then(|(val, _)| {
+                    match **atom {
+                        LispType::Atom(ref atomr) => {
+                            let mut atom = atomr.borrow_mut();
+                            *atom = val.clone();
+                            Ok(val.clone())
+                        }
+                        _ => Err(error_message("wrong type of argument to reset!"))
+                    }
         })
     })
 }
 
 // swap!: Takes an atom, a function, and zero or more function arguments. The atom's value is modified to the result of applying the function with the atom's value as the first argument and the optionally given function arguments as the rest of the arguments. The new atom's value is returned.
 // (swap! myatom (fn* [x y] (+ 1 x y)) 22)
-fn swap(args: Vec<Ast>) -> Option<Ast> {
-    args.split_first().and_then(|(atom, rest)| {
-        rest.split_first().and_then(|(f, params)| {
-            match atom {
-                &Ast::Atom(ref atom) => {
-                    match f {
-                        &Ast::Lambda{
-                            ref env,
-                            ..
-                        } => {
-                            let val = atom.clone().into_inner();
-                            let mut full_params = vec![*val];
-                            full_params.append(&mut params.to_vec());
-                            let evops = eval_ops(full_params, env.clone());
-                            apply(f, evops, env.clone()).and_then(|newval| {
-                                let newvalcopy = newval.clone();
-                                let mut a = atom.borrow_mut();
-                                *a = Box::new(newvalcopy);
-                                newval.into()
-                            })
+fn swap(args: Seq) -> EvaluationResult {
+    args.split_first()
+        .ok_or(error_message("wrong arity to swap!"))
+        .and_then(|(atom, rest)| {
+            rest.split_first()
+                .ok_or(error_message("wrong arity to swap!"))
+                .and_then(|(f, args)| {
+                    match **atom {
+                        LispType::Atom(ref atom) => {
+                            match **f {
+                                LispType::Lambda{
+                                    ref params,
+                                    ref body,
+                                    ref env,
+                                    ..
+                                } => {
+                                    let mut value = atom.borrow_mut();
+                                    let mut full_params = vec![value.clone()];
+                                    full_params.append(&mut args.to_vec());
+                                    apply_lambda(params.clone(), body.clone(), env.clone(), full_params.to_vec()).and_then(|newval| {
+                                        *value = newval.clone();
+                                        Ok(newval)
+                                    })
+                                },
+                                LispType::Fn(f) => {
+                                    let mut value = atom.borrow_mut();
+                                    let mut full_params = vec![value.clone()];
+                                    full_params.append(&mut args.to_vec());
+                                    f(full_params).and_then(|newval| {
+                                        *value = newval.clone();
+                                        Ok(newval)
+                                    })
+                                }
+                                _ => Err(error_message("wrong type of arguments to swap!")),
+                            }
                         },
-                        _ => None,
+                        _ => Err(error_message("wront type of arguments to swap!"))
                     }
-                },
-                _ => None
-            }
+                })
         })
-    })
 }
