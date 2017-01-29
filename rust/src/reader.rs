@@ -200,7 +200,7 @@ fn read_atom(reader: &mut Reader) -> ReaderResult {
                         .or(number_from(s))
                         .or(keyword_from(s))
                         .or(string_from(s))
-                        .or(symbol_from(s))
+                        .or(symbol_from(s)) // catch-all, call last
                 }
                 _ => {
                     Err(ReaderError::Message("reader: trying to get atom from non-atom token"
@@ -267,6 +267,7 @@ fn read_str(s: &str) -> String {
         .replace(r#"\\"#, "\\")
 }
 
+// symbol_from will accept any token so it needs to be called as a catch-all
 fn symbol_from(token: &str) -> ReaderResult {
     Ok(new_symbol(token))
 }
