@@ -1,7 +1,8 @@
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
-use types::LispValue;
+use types::{LispValue, EvaluationResult};
+use error::EvaluationError;
 use ns;
 
 pub type Env = Rc<RefCell<EnvData>>;
@@ -36,17 +37,20 @@ impl EnvData {
         self.bindings.insert(key, val);
     }
 
-    pub fn get(&self, key: &str) -> Option<LispValue> {
-        self.bindings
-            .get(key)
-            .and_then(|val| Some(val.clone()))
-            .or_else(|| {
-                if let Some(ref env) = self.outer {
-                    env.borrow().get(key)
-                } else {
-                    None
-                }
-            })
+    pub fn get(&self, key: &str) -> EvaluationResult {
+        self.find(key)
+            .ok_or(EvaluationError::MissingSymbol(key.to_string()))
+    }
+
+    fn find(&self, key: &str) -> Option<LispValue> {
+        let result = self.bindings.get(key);
+        if let Some(value) = result {
+            Some(value.clone())
+        } else if let Some(ref parent) = self.outer {
+            parent.borrow().find(key).clone()
+        } else {
+            None
+        }
     }
 
     pub fn inspect(&self) {

@@ -4,18 +4,22 @@ use error::{error_message, EvaluationError};
 use ns;
 use env::{Env, empty_from, new, root};
 
-pub fn eval(ast: LispValue, env: Env) -> EvaluationResult {
-    macroexpand(ast, env.clone()).and_then(|ast| {
-        match *ast {
-            LispType::Symbol(ref s) => {
-                env.borrow()
-                    .get(s)
-                    .ok_or(EvaluationError::MissingSymbol(s.clone()))
-            }
+pub fn eval(val: LispValue, env: Env) -> EvaluationResult {
+    macroexpand(val, env.clone()).and_then(|val| {
+        match *val {
+            LispType::Symbol(ref s) => eval_symbol(s, env),
             LispType::List(ref seq) => eval_list(seq.to_vec(), env),
-            _ => Ok(ast.clone()), // self-evaluating
+            _ => eval_self_evaluating(val.clone()),
         }
     })
+}
+
+fn eval_symbol(s: &str, env: Env) -> EvaluationResult {
+    env.borrow().get(s)
+}
+
+fn eval_self_evaluating(val: LispValue) -> EvaluationResult {
+    Ok(val)
 }
 
 const IF_FORM: &'static str = "if";
@@ -31,7 +35,6 @@ const MACRO_FORM: &'static str = "defmacro!";
 const MACROEXPAND_FORM: &'static str = "macroexpand";
 const TRY_FORM: &'static str = "try*";
 const CATCH_FORM: &'static str = "catch*";
-
 
 fn eval_list(seq: Seq, env: Env) -> EvaluationResult {
     if seq.is_empty() {
@@ -236,7 +239,7 @@ fn eval_quasiquote(seq: Seq, env: Env) -> EvaluationResult {
     seq.first()
         .ok_or(EvaluationError::Message("wrong arity".to_string()))
         .and_then(|arg| eval_quasiquote_for(arg, env.clone()))
-        .and_then(|ast| eval(ast, env))
+        .and_then(|val| eval(val, env))
 }
 
 fn eval_quasiquote_for(arg: &LispValue, env: Env) -> EvaluationResult {
@@ -340,8 +343,8 @@ fn eval_macro(seq: Seq, env: Env) -> EvaluationResult {
     })
 }
 
-fn is_macro_call(ast: &LispValue, env: Env) -> bool {
-    match **ast {
+fn is_macro_call(val: &LispValue, env: Env) -> bool {
+    match **val {
         LispType::List(ref seq) => {
             if seq.is_empty() {
                 return false;
@@ -350,13 +353,13 @@ fn is_macro_call(ast: &LispValue, env: Env) -> bool {
             match *seq[0] {
                 LispType::Symbol(ref s) => {
                     match env.borrow().get(s) {
-                        Some(ast) => {
-                            match *ast {
+                        Ok(val) => {
+                            match *val {
                                 LispType::Lambda { is_macro, .. } => is_macro.into(),
                                 _ => false.into(),
                             }
                         }
-                        None => false,
+                        Err(_) => false,
                     }
                 }
                 _ => false,
@@ -366,8 +369,8 @@ fn is_macro_call(ast: &LispValue, env: Env) -> bool {
     }
 }
 
-fn macroexpand(ast: LispValue, env: Env) -> EvaluationResult {
-    let mut result = ast.clone();
+fn macroexpand(val: LispValue, env: Env) -> EvaluationResult {
+    let mut result = val.clone();
     while is_macro_call(&result, env.clone()) {
         let expansion = match *result {
             LispType::List(ref seq) => {
@@ -376,14 +379,12 @@ fn macroexpand(ast: LispValue, env: Env) -> EvaluationResult {
                     LispType::Symbol(ref s) => {
                         env.borrow()
                             .get(s)
-                            .ok_or(EvaluationError::Message("macroexpand: missing symbol"
-                                .to_string()))
-                            .and_then(|ast| apply(ast, seq[1..].to_vec(), env.clone()))
+                            .and_then(|val| apply(val, seq[1..].to_vec(), env.clone()))
                     }
-                    _ => Err(EvaluationError::BadArguments(ast.clone())),
+                    _ => Err(EvaluationError::BadArguments(val.clone())),
                 }
             }
-            _ => Err(EvaluationError::BadArguments(ast.clone())),
+            _ => Err(EvaluationError::BadArguments(val.clone())),
         };
         match expansion {
             Ok(val) => result = val,
@@ -396,7 +397,7 @@ fn macroexpand(ast: LispValue, env: Env) -> EvaluationResult {
 fn eval_macroexpand(seq: Seq, env: Env) -> EvaluationResult {
     seq.first()
         .ok_or(error_message("not enough args in call to macroexpand"))
-        .and_then(|ast| macroexpand(ast.clone(), env))
+        .and_then(|val| macroexpand(val.clone(), env))
 }
 
 fn eval_try(seq: Seq, env: Env) -> EvaluationResult {
@@ -441,6 +442,6 @@ fn eval_catch(handler: LispValue, env: Env) -> EvaluationResult {
 
 fn eval_exception(handler: LispValue, exception: LispValue, env: Env) -> EvaluationResult {
     let body = vec![handler, exception];
-    let ast = new_list(body);
-    eval(ast, env)
+    let val = new_list(body);
+    eval(val, env)
 }
