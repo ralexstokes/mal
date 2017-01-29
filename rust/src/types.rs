@@ -1,49 +1,102 @@
 use std::fmt;
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::cmp::PartialEq;
+use std::result::Result;
 use printer;
 use env::Env;
 use error::EvaluationError;
 
-pub type EvaluationResult = ::std::result::Result<Ast, EvaluationError>;
-
-pub type HostFn = fn(Vec<Ast>) -> EvaluationResult;
+pub type LispValue = Rc<LispType>;
 
 #[derive(Debug,Clone)]
-pub enum Ast {
+pub enum LispType {
     Nil,
     Boolean(bool),
     String(String),
     Number(i64),
     Symbol(String),
     Lambda {
-        params: Vec<Ast>,
-        body: Vec<Ast>,
+        params: Vec<LispValue>,
+        body: Vec<LispValue>,
         env: Env,
         is_macro: bool,
     },
     Fn(HostFn),
-    List(Vec<Ast>),
-    Atom(RefCell<Box<Ast>>),
+    List(Vec<LispValue>),
+    Atom(RefCell<LispValue>),
 }
 
-impl fmt::Display for Ast {
+pub type Seq = Vec<LispValue>;
+
+pub type EvaluationResult = Result<LispValue, EvaluationError>;
+
+pub type HostFn = fn(Seq) -> EvaluationResult;
+
+fn value_of(t: LispType) -> LispValue {
+    Rc::new(t)
+}
+
+pub fn new_nil() -> LispValue {
+    value_of(LispType::Nil)
+}
+
+pub fn new_boolean(b: bool) -> LispValue {
+    value_of(LispType::Boolean(b))
+}
+
+pub fn new_string(s: &str) -> LispValue {
+    value_of(LispType::String(s.to_string()))
+}
+
+pub fn new_number(n: i64) -> LispValue {
+    value_of(LispType::Number(n))
+}
+
+pub fn new_symbol(s: &str) -> LispValue {
+    value_of(LispType::Symbol(s.to_string()))
+}
+
+pub fn new_lambda(params: Seq, body: Seq, env: Env, is_macro: bool) -> LispValue {
+    value_of(LispType::Lambda {
+        params: params,
+        body: body,
+        env: env,
+        is_macro: is_macro,
+    })
+}
+
+pub fn new_fn(f: HostFn) -> LispValue {
+    value_of(LispType::Fn(f))
+}
+
+pub fn new_list(s: Seq) -> LispValue {
+    value_of(LispType::List(s))
+}
+
+pub fn new_atom(atom: LispValue) -> LispValue {
+    value_of(LispType::Atom(RefCell::new(atom)))
+}
+
+impl fmt::Display for LispType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", printer::print(self))
+        // TODO need an RC just to satisfy the type here?
+        write!(f, "{}", printer::print(value_of(self.clone())))
     }
 }
 
-impl PartialEq for Ast {
-    fn eq(&self, other: &Ast) -> bool {
-        use types::Ast::*;
-        match (self.clone(), other.clone()) {
-            (Nil, Nil) => true,
-            (Boolean(x), Boolean(y)) if x == y => true,
-            (String(ref s), String(ref t)) if s == t => true,
-            (Number(x), Number(y)) if x == y => true,
-            (Symbol(ref s), Symbol(ref t)) if s == t => true,
-            (Lambda { .. }, Lambda { .. }) => false,
-            (Fn(f), Fn(g)) if f == g => true,
-            (List(xs), List(ys)) => xs == ys,
+impl PartialEq for LispType {
+    fn eq(&self, other: &LispType) -> bool {
+        use types::LispType::*;
+        match (self, other) {
+            (&Nil, &Nil) => true,
+            (&Boolean(x), &Boolean(y)) if x == y => true,
+            (&String(ref s), &String(ref t)) if s == t => true,
+            (&Number(x), &Number(y)) if x == y => true,
+            (&Symbol(ref s), &Symbol(ref t)) if s == t => true,
+            (&Lambda { .. }, &Lambda { .. }) => false,
+            (&Fn(f), &Fn(g)) if f == g => true,
+            (&List(ref xs), &List(ref ys)) => xs == ys,
             _ => false,
         }
     }

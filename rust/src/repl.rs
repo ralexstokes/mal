@@ -4,7 +4,7 @@ use printer::print;
 use eval::eval;
 use env;
 use prelude;
-use types::Ast;
+use types::{new_symbol, new_list};
 use error::{Error, ReplError, ReaderError};
 
 pub struct Repl {
@@ -17,7 +17,7 @@ const ARGV_SYMBOL: &'static str = "*ARGV*";
 const GREETING_FORM: &'static str = "(println (str \"Mal [\" *host-language* \"]\"))";
 
 impl Repl {
-    pub fn new(prompt: String) -> Repl {
+    pub fn new(prompt: &str) -> Repl {
         Repl { reader: Reader::new(prompt) }
     }
 
@@ -42,9 +42,9 @@ impl Repl {
             let result = args.split_first()
                 .and_then(|(file_name, env_args)| {
                     let ast_args = env_args.iter()
-                        .map(|arg| Ast::Symbol(arg.clone()))
+                        .map(|arg| new_symbol(arg))
                         .collect::<Vec<_>>();
-                    let list_args = Ast::List(ast_args.to_vec());
+                    let list_args = new_list(ast_args.to_vec());
                     env.borrow_mut().set(ARGV_SYMBOL.to_string(), list_args);
                     self.rep_from_file(file_name, env.clone()).into()
                 });
@@ -94,7 +94,7 @@ impl Repl {
 
     pub fn rep(&mut self, input: String, env: env::Env) -> ReplResult {
         let ast = try!(read(input));
-        let val = try!(eval(&ast, env));
-        Ok(print(&val))
+        let val = try!(eval(ast, env));
+        Ok(print(val))
     }
 }

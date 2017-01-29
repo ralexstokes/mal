@@ -18,8 +18,8 @@ pub struct DefaultReader {
 }
 
 impl DefaultReader {
-    pub fn new(prompt: String) -> DefaultReader {
-        DefaultReader { prompt: prompt }
+    pub fn new(prompt: &str) -> DefaultReader {
+        DefaultReader { prompt: prompt.to_string() }
     }
 
     pub fn write_ok(&self, msg: String) {
@@ -86,13 +86,13 @@ pub struct LineReader {
 const HISTORY_FILENAME: &'static str = ".mal-history.txt";
 
 impl LineReader {
-    pub fn new(prompt: String) -> LineReader {
+    pub fn new(prompt: &str) -> LineReader {
         let mut editor = LineEditor::new();
 
         let path = LineReader::init_history(&mut editor, HISTORY_FILENAME).unwrap();
 
         LineReader {
-            prompt: prompt,
+            prompt: prompt.to_string(),
             editor: editor,
             history_path: path,
         }

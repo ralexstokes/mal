@@ -1,41 +1,41 @@
-use types::Ast;
+use types::{LispValue, LispType};
 
-pub fn print(ast: &Ast) -> String {
-    pr_str(ast, true)
+pub fn print(value: LispValue) -> String {
+    pr_str(value, true)
 }
 
 // When print_readably is true, doublequotes, newlines, and backslashes are translated into their printed representations (the reverse of the reader).
-pub fn pr_str(ast: &Ast, readably: bool) -> String {
-    match *ast {
-        Ast::Nil => "nil".to_string(),
-        Ast::Boolean(b) => b.to_string(),
-        Ast::String(ref s) => {
+pub fn pr_str(value: LispValue, readably: bool) -> String {
+    match *value {
+        LispType::Nil => "nil".to_string(),
+        LispType::Boolean(b) => b.to_string(),
+        LispType::String(ref s) => {
             if readably {
                 unread_str(s)
             } else {
                 s.clone()
             }
         }
-        Ast::Number(n) => n.to_string(),
-        Ast::Symbol(ref s) => s.clone(),
-        Ast::List(ref seq) => {
+        LispType::Number(n) => n.to_string(),
+        LispType::Symbol(ref s) => s.clone(),
+        LispType::List(ref seq) => {
             let results = seq.into_iter()
-                .map(|node| pr_str(&node, readably))
+                .map(|node| pr_str(node.clone(), readably))
                 .collect::<Vec<_>>()
                 .join(" ");
             ("(".to_string() + &results + ")")
         }
-        Ast::Lambda { is_macro, .. } => {
+        LispType::Lambda { is_macro, .. } => {
             if is_macro {
                 "#<macro>".to_string()
             } else {
                 "#<fn>".to_string()
             }
         }
-        Ast::Fn(_) => "#<host-fn>".to_string(),
-        Ast::Atom(atom) => {
-            let inner = atom.borrow();
-            Some(format!("atom({})", inner.clone()))
+        LispType::Fn(_) => "#<host-fn>".to_string(),
+        LispType::Atom(ref atom) => {
+            let value = atom.borrow();
+            format!("(atom {})", *value)
         }
     }
 }
@@ -59,22 +59,21 @@ fn unread_str(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use types::Ast;
+    use types::{new_symbol, new_number, new_list};
 
     #[test]
     fn test_print_symbol() {
-        let inputstr = "foobar";
-        let input = inputstr.to_string();
-        let ast = Ast::Symbol(input);
+        let input = "foobar";
+        let ast = new_symbol(&input);
         let output = print(ast);
-        if output.as_str() != inputstr {
+        if output.as_str() != input {
             panic!("not equal")
         }
     }
 
     #[test]
     fn test_print_number() {
-        let ast = Ast::Number(3);
+        let ast = new_number(3);
         let output = print(ast);
         if output.as_str() != "3" {
             panic!("not equal")
@@ -83,7 +82,7 @@ mod tests {
 
     #[test]
     fn test_print_list() {
-        let ast = Ast::List(vec![Ast::Symbol("+".to_string()), Ast::Number(2), Ast::Number(3)]);
+        let ast = new_list(vec![new_symbol("+"), new_number(2), new_number(3)]);
         let output = print(ast);
         if output.as_str() != "(+ 2 3)" {
             panic!("not equal")

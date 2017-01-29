@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::result::Result;
-use types::{Ast, HostFn, EvaluationResult};
+use types::{LispValue, LispType, HostFn, EvaluationResult, Seq, new_list, new_fn, new_number, new_nil, new_string, new_atom, new_boolean};
 use error::{error_message, ReaderError, EvaluationError};
 use printer;
 use reader;
@@ -9,9 +9,10 @@ use std::fs::File;
 use eval::{eval, apply_lambda};
 use readline;
 
-pub type Ns = HashMap<String, Ast>;
 
-pub fn new(bindings: Vec<(String, Ast)>) -> Ns {
+pub type Ns = HashMap<String, LispValue>;
+
+pub fn new(bindings: Vec<(String, LispValue)>) -> Ns {
     let mut ns = Ns::new();
 
     for binding in bindings {
@@ -21,11 +22,11 @@ pub fn new(bindings: Vec<(String, Ast)>) -> Ns {
     ns
 }
 
-pub fn new_from(params: Vec<Ast>, exprs: Vec<Ast>) -> Ns {
+pub fn new_from(params: Seq, exprs: Seq) -> Ns {
     let params = params.iter()
         .map(|p| {
-            match *p {
-                Ast::Symbol(ref s) => s.clone(),
+            match **p {
+                LispType::Symbol(ref s) => s.clone(),
                 _ => unreachable!(),
             }
         })
@@ -47,7 +48,7 @@ pub fn new_from(params: Vec<Ast>, exprs: Vec<Ast>) -> Ns {
             let var_exprs = exprs.into_iter()
                 .skip(bound_exprs.len())
                 .collect::<Vec<_>>();
-            (var_param.clone(), Ast::List(var_exprs)).into()
+            (var_param.clone(), new_list(var_exprs)).into()
         });
 
     if let Some((param, expr)) = var_binding {
@@ -102,27 +103,27 @@ pub fn core() -> Ns {
                                                      ("swap!", swap),
     ];
     let bindings = mappings.iter()
-        .map(|&(k, v)| (k.to_string(), Ast::Fn(v)))
+        .map(|&(k, v)| (k.to_string(), new_fn(v)))
         .collect();
     new(bindings)
 }
 
-fn i64_from_ast(a: Ast, b: Ast) -> (i64, i64) {
-    let aa = match a {
-        Ast::Number(x) => x,
+fn i64_from_ast(a: LispValue, b: LispValue) -> (i64, i64) {
+    let aa = match *a {
+        LispType::Number(x) => x,
         _ => 0,
     };
 
-    let bb = match b {
-        Ast::Number(x) => x,
+    let bb = match *b {
+        LispType::Number(x) => x,
         _ => 0,
     };
 
     (aa, bb)
 }
 
-fn fold_first<F>(seq: Vec<Ast>, f: F) -> EvaluationResult
-    where F: Fn(Ast, Ast) -> Ast
+fn fold_first<F>(seq: Seq, f: F) -> EvaluationResult
+    where F: Fn(LispValue, LispValue) -> LispValue
 {
     seq.split_first()
         .ok_or(error_message("not enough args to op"))
@@ -139,109 +140,109 @@ fn fold_first<F>(seq: Vec<Ast>, f: F) -> EvaluationResult
         })
 }
 
-fn add(seq: Vec<Ast>) -> EvaluationResult {
+fn add(seq: Seq) -> EvaluationResult {
     fold_first(seq, |a, b| {
         let (a, b) = i64_from_ast(a, b);
-        Ast::Number(a + b)
+        new_number(a + b)
     })
 }
 
-fn sub(seq: Vec<Ast>) -> EvaluationResult {
+fn sub(seq: Seq) -> EvaluationResult {
     fold_first(seq, |a, b| {
         let (a, b) = i64_from_ast(a, b);
-        Ast::Number(a - b)
+        new_number(a - b)
     })
 }
 
-fn mul(seq: Vec<Ast>) -> EvaluationResult {
+fn mul(seq: Seq) -> EvaluationResult {
     fold_first(seq, |a, b| {
         let (a, b) = i64_from_ast(a, b);
-        Ast::Number(a * b)
+        new_number(a * b)
     })
 }
 
-fn div(seq: Vec<Ast>) -> EvaluationResult {
+fn div(seq: Seq) -> EvaluationResult {
     fold_first(seq, |a, b| {
         let (a, b) = i64_from_ast(a, b);
-        Ast::Number(a / b)
+        new_number(a / b)
     })
 }
 
-fn string_of(args: Vec<Ast>, readably: bool, separator: &str) -> String {
+fn string_of(args: Seq, readably: bool, separator: &str) -> String {
     args.iter()
-        .map(|p| printer::pr_str(p, readably))
+        .map(|p| printer::pr_str(p.clone(), readably))
         .collect::<Vec<_>>()
         .join(separator)
 }
 
 // prn: calls pr_str on each argument with print_readably set to true, joins the results with " ", prints the string to the screen and then returns nil.
-fn prn(args: Vec<Ast>) -> EvaluationResult {
+fn prn(args: Seq) -> EvaluationResult {
     println!("{}", string_of(args, true, " "));
 
-    Ok(Ast::Nil)
+    Ok(new_nil())
 }
 
 // pr-str: calls pr_str on each argument with print_readably set to true, joins the results with " " and returns the new string.
-fn print_to_str(args: Vec<Ast>) -> EvaluationResult {
+fn print_to_str(args: Seq) -> EvaluationResult {
     let s = string_of(args, true, " ");
 
-    Ok(Ast::String(s))
+    Ok(new_string(&s))
 }
 
 // str: calls pr_str on each argument with print_readably set to false, concatenates the results together ("" separator), and returns the new string.
-fn to_str(args: Vec<Ast>) -> EvaluationResult {
+fn to_str(args: Seq) -> EvaluationResult {
     let s = string_of(args, false, "");
 
-    Ok(Ast::String(s))
+    Ok(new_string(&s))
 }
 
 // println: calls pr_str on each argument with print_readably set to false, joins the results with " ", prints the string to the screen and then returns nil.
-fn println(args: Vec<Ast>) -> EvaluationResult {
+fn println(args: Seq) -> EvaluationResult {
     println!("{}", string_of(args, false, " "));
 
-    Ok(Ast::Nil)
+    Ok(new_nil())
 }
 
-fn to_list(args: Vec<Ast>) -> EvaluationResult {
-    Ok(Ast::List(args))
+fn to_list(args: Seq) -> EvaluationResult {
+    Ok(new_list((args)))
 }
 
-fn is_list(args: Vec<Ast>) -> EvaluationResult {
+fn is_list(args: Seq) -> EvaluationResult {
     args.first()
         .and_then(|a| {
-            let is = match a.clone() {
-                Ast::List(_) => true,
+            let is = match **a {
+                LispType::List(_) => true,
                 _ => false,
             };
-            Ast::Boolean(is).into()
+            new_boolean(is).into()
         })
         .ok_or(error_message("could not determine if seq is list"))
 }
 
-fn is_empty(args: Vec<Ast>) -> EvaluationResult {
+fn is_empty(args: Seq) -> EvaluationResult {
     args.first()
         .and_then(|a| {
-            match a.clone() {
-                Ast::List(seq) => Ast::Boolean(seq.is_empty()).into(),
+            match **a {
+                LispType::List(ref seq) => new_boolean(seq.is_empty()).into(),
                 _ => None,
             }
         })
         .ok_or(error_message("could not determine if seq is empty"))
 }
 
-fn count_of(args: Vec<Ast>) -> EvaluationResult {
+fn count_of(args: Seq) -> EvaluationResult {
     args.first()
         .and_then(|a| {
-            match a.clone() {
-                Ast::List(seq) => Ast::Number(seq.len() as i64).into(),
-                Ast::Nil => Ast::Number(0).into(),
+            match **a {
+                LispType::List(ref seq) => new_number(seq.len() as i64).into(),
+                LispType::Nil => new_number(0).into(),
                 _ => None,
             }
         })
         .ok_or(error_message("could not determine count of seq"))
 }
 
-fn is_equal(args: Vec<Ast>) -> EvaluationResult {
+fn is_equal(args: Seq) -> EvaluationResult {
     args.split_first()
         .and_then(|(first, rest)| {
             rest.split_first()
@@ -250,13 +251,13 @@ fn is_equal(args: Vec<Ast>) -> EvaluationResult {
                         return None;
                     }
 
-                    Ast::Boolean(first == second).into()
+                    new_boolean(first == second).into()
                 })
         })
         .ok_or(error_message("could not determine if args are equal"))
 }
 
-fn args_are<F>(args: Vec<Ast>, f: F) -> EvaluationResult
+fn args_are<F>(args: Seq, f: F) -> EvaluationResult
     where F: Fn(i64, i64) -> bool
 {
     args.split_first()
@@ -264,38 +265,38 @@ fn args_are<F>(args: Vec<Ast>, f: F) -> EvaluationResult
             rest.split_first()
                 .and_then(|(second, _)| {
                     let (a, b) = i64_from_ast(first.clone(), second.clone());
-                    Ast::Boolean(f(a, b)).into()
+                    new_boolean(f(a, b)).into()
                 })
         }).ok_or(error_message("could not determine if args are ordered"))
 }
 
 
-fn lt(args: Vec<Ast>) -> EvaluationResult {
+fn lt(args: Seq) -> EvaluationResult {
     args_are(args, |a, b| a < b)
 }
 
 
-fn lte(args: Vec<Ast>) -> EvaluationResult {
+fn lte(args: Seq) -> EvaluationResult {
     args_are(args, |a, b| a <= b)
 }
 
 
-fn gt(args: Vec<Ast>) -> EvaluationResult {
+fn gt(args: Seq) -> EvaluationResult {
     args_are(args, |a, b| a > b)
 }
 
 
-fn gte(args: Vec<Ast>) -> EvaluationResult {
+fn gte(args: Seq) -> EvaluationResult {
     args_are(args, |a, b| a >= b)
 }
 
 
-fn read_string(args: Vec<Ast>) -> EvaluationResult {
+fn read_string(args: Seq) -> EvaluationResult {
     args.first()
         .ok_or(error_message("not enough arg in args"))
         .and_then(|arg| {
-            match *arg {
-                Ast::String(ref s) => {
+            match **arg {
+                LispType::String(ref s) => {
                     reader::read(s.clone()).map_err(|e| {
                             match e {
                                 ReaderError::Message(s) => {
@@ -312,11 +313,11 @@ fn read_string(args: Vec<Ast>) -> EvaluationResult {
         })
 }
 
-fn slurp(args: Vec<Ast>) -> EvaluationResult {
+fn slurp(args: Seq) -> EvaluationResult {
     let filename = args.first()
         .and_then(|arg| {
-            match *arg {
-                Ast::String(ref filename) => filename.into(),
+            match **arg {
+                LispType::String(ref filename) => filename.into(),
                 _ => None
             }
         });
@@ -329,25 +330,25 @@ fn slurp(args: Vec<Ast>) -> EvaluationResult {
                 .and_then(|mut f| {
                     f.read_to_string(&mut buffer)
                 }).map(|_| {
-                    Ast::String(buffer)
+                    new_string(&buffer)
                 }).map_err(|_| error_message("slurp could not read file"))
         })
 }
 
 // cons: this function takes a list as its second parameter and returns a new list that has the first argument prepended to it.
-fn cons(args: Vec<Ast>) -> EvaluationResult {
+fn cons(args: Seq) -> EvaluationResult {
     args.split_first()
         .and_then(|(elem, rest)| {
             rest.split_first()
                 .and_then(|(list, _)| {
                     let mut elems = vec![elem.clone()];
-                    match *list {
-                        Ast::List(ref seq) => {
+                    match **list {
+                        LispType::List(ref seq) => {
                             for s in seq {
                                 elems.push(s.clone())
                             }
 
-                            Ast::List(elems).into()
+                            new_list(elems).into()
                         },
                         _ => None
                     }
@@ -357,12 +358,12 @@ fn cons(args: Vec<Ast>) -> EvaluationResult {
 }
 
 // concat: this functions takes 0 or more lists as parameters and returns a new list that is a concatenation of all the list parameters.
-fn concat(args: Vec<Ast>) -> EvaluationResult {
-    let mut result: Vec<Ast> = vec![];
+fn concat(args: Seq) -> EvaluationResult {
+    let mut result: Seq = vec![];
 
     for arg in args {
-        match arg {
-            Ast::List(ref seq) => {
+        match *arg {
+            LispType::List(ref seq) => {
                 for s in seq {
                     result.push(s.clone());
                 }
@@ -371,17 +372,17 @@ fn concat(args: Vec<Ast>) -> EvaluationResult {
         }
     }
 
-    Ok(Ast::List(result))
+    Ok(new_list((result)))
 }
 
 // nth: this function takes a list (or vector) and a number (index) as arguments, returns the element of the list at the given index. If the index is out of range, this function raises an exception.
-fn nth(args: Vec<Ast>) -> EvaluationResult {
+fn nth(args: Seq) -> EvaluationResult {
     let result = args.split_first().and_then(|(seq, rest)| {
         rest.split_first().and_then(|(idx, _)| {
-            match *seq {
-                Ast::List(ref seq) => {
-                    match *idx {
-                        Ast::Number(n) => {
+            match **seq {
+                LispType::List(ref seq) => {
+                    match **idx {
+                        LispType::Number(n) => {
                             let n = n as usize;
                             seq.get(n)
                         },
@@ -397,45 +398,44 @@ fn nth(args: Vec<Ast>) -> EvaluationResult {
 }
 
 // first: this function takes a list (or vector) as its argument and return the first element. If the list (or vector) is empty or is nil then nil is returned.
-fn first(args: Vec<Ast>) -> EvaluationResult {
+fn first(args: Seq) -> EvaluationResult {
     args.first().and_then(|seq| {
-        match *seq {
-            Ast::List(ref seq)  => {
+        match **seq {
+            LispType::List(ref seq)  => {
                 if seq.is_empty() {
-                    Some(Ast::Nil)
+                    Some(new_nil())
                 } else {
                     seq.first().map(|elem| elem.clone())
                 }
             },
-            Ast::Nil => Some(Ast::Nil),
+            LispType::Nil => Some(new_nil()),
             _ => None
         }
     }).ok_or(error_message("call to first failed"))
 }
 
 // rest: this function takes a list (or vector) as its argument and returns a new list containing all the elements except the first.
-fn rest(args: Vec<Ast>) -> EvaluationResult {
+fn rest(args: Seq) -> EvaluationResult {
     args.first().and_then(|seq| {
-        match *seq {
-            Ast::List(ref seq)  => {
+        match **seq {
+            LispType::List(ref seq)  => {
                 let items = if seq.is_empty() {
                     vec![]
                 } else {
                     seq[1..].to_vec()
                 };
-                Ast::List(items).into()
+                new_list(items).into()
             },
-            Ast::Nil => Some(Ast::Nil),
+            LispType::Nil => Some(new_nil()),
             _ => None
         }
     }).ok_or(error_message("call to rest failed"))
 }
 
 // throw: wraps its argument in an exception
-fn throw(args: Vec<Ast>) -> EvaluationResult {
-    // println!("evaling throw: {:?}", args);
+fn throw(args: Seq) -> EvaluationResult {
     let val = if args.len() == 0 {
-        Ast::Nil
+        new_nil()
     } else {
         args[0].clone()
     };
@@ -445,15 +445,15 @@ fn throw(args: Vec<Ast>) -> EvaluationResult {
 
 
 // apply: takes at least two arguments. The first argument is a function and the last argument is list (or vector). The arguments between the function and the last argument (if there are any) are concatenated with the final argument to create the arguments that are used to call the function. The apply function allows a function to be called with arguments that are contained in a list (or vector). In other words, (apply F A B [C D]) is equivalent to (F A B C D).
-fn apply(args: Vec<Ast>) -> EvaluationResult {
+fn apply(args: Seq) -> EvaluationResult {
     let len = args.len();
     if len < 2 {
-        return Err(EvaluationError::WrongArity(Ast::Nil)) // fix argument here
+        return Err(EvaluationError::WrongArity(new_nil())) // fix argument here
     }
 
     let f = &args[0];
-    match f {
-        &Ast::Lambda{
+    match **f {
+        LispType::Lambda{
             ref env,
             ..
         } => {
@@ -461,10 +461,10 @@ fn apply(args: Vec<Ast>) -> EvaluationResult {
                 .and_then(|mut args| {
                     let mut app = vec![f.clone()];
                     app.append(&mut args);
-                    eval(&Ast::List(app), env.clone())
+                    eval(new_list(app), env.clone())
                 })
         },
-        &Ast::Fn(f) => {
+        LispType::Fn(f) => {
             flatten_last(args[1..].to_vec())
                 .and_then(|args| {
                     f(args)
@@ -475,13 +475,13 @@ fn apply(args: Vec<Ast>) -> EvaluationResult {
 }
 
 // flatten_last returns a vector of elements where each nested element in the last arg in args has been appended to the other arguments in args.
-fn flatten_last(args: Vec<Ast>) -> Result<Vec<Ast>, EvaluationError> {
+fn flatten_last(args: Seq) -> Result<Seq, EvaluationError> {
     let mut result = vec![];
     let len = args.len();
     for (i, arg) in args.iter().enumerate() {
         if i == len - 1 {
-            match arg {
-                &Ast::List(ref seq) => {
+            match **arg {
+                LispType::List(ref seq) => {
                     for s in seq.iter() {
                         result.push(s.clone());
                     }
@@ -498,22 +498,22 @@ fn flatten_last(args: Vec<Ast>) -> Result<Vec<Ast>, EvaluationError> {
 
 // map: takes a function and a list (or vector) and evaluates the function against every element of the list (or vector) one at a time and returns the results as a list.
 // (map f xs)
-fn map(args: Vec<Ast>) -> EvaluationResult {
+fn map(args: Seq) -> EvaluationResult {
     args.split_first()
         .ok_or(error_message("wrong arity to map -- missing first arg"))
         .and_then(|(f, rest)| {
             rest.split_first()
                 .ok_or(error_message("wrong arity to map -- missing rest args"))
                 .and_then(|(xs, _)| {
-            match f {
-                &Ast::Lambda{
+            match **f {
+                LispType::Lambda{
                     ref params,
                     ref body,
                     ref env,
                     ..
                 } => {
-                    match xs {
-                        &Ast::List(ref xs) => {
+                    match **xs {
+                        LispType::List(ref xs) => {
                             let mut fxs = vec![];
                             for x in xs.iter() {
                                 let args = vec![x.clone()];
@@ -523,20 +523,20 @@ fn map(args: Vec<Ast>) -> EvaluationResult {
                                                            args));
                                 fxs.push(fx);
                             }
-                            Ok(Ast::List(fxs))
+                            Ok(new_list((fxs)))
                         },
                         _ => Err(error_message("expected second argument to map to be a list or vector"))
                     }
                 },
-                &Ast::Fn(f) => {
-                    match xs {
-                        &Ast::List(ref xs) => {
+                LispType::Fn(f) => {
+                    match **xs {
+                        LispType::List(ref xs) => {
                             let mut fxs = vec![];
                             for x in xs.iter() {
                                 let fx = try!(f(vec![x.clone()]));
                                 fxs.push(fx);
                             }
-                            Ok(Ast::List(fxs))
+                            Ok(new_list((fxs)))
                         },
                         _ => Err(error_message("expected second argument to map to be a list or vector"))
                     }
@@ -548,64 +548,64 @@ fn map(args: Vec<Ast>) -> EvaluationResult {
 }
 
 // nil?: takes a single argument and returns true (mal true value) if the argument is nil (mal nil value).
-fn is_nil(args: Vec<Ast>) -> EvaluationResult {
+fn is_nil(args: Seq) -> EvaluationResult {
     args.first()
         .ok_or(error_message("wrong arity"))
         .and_then(|arg| {
-            match *arg {
-                Ast::Nil => Ok(Ast::Boolean(true)),
-                _ => Ok(Ast::Boolean(false)),
+            match **arg {
+                LispType::Nil => Ok(new_boolean(true)),
+                _ => Ok(new_boolean(false)),
             }
         })
 }
 
 // true?: takes a single argument and returns true (mal true value) if the argument is a true value (mal true value).
-fn is_true(args: Vec<Ast>) -> EvaluationResult {
+fn is_true(args: Seq) -> EvaluationResult {
     args.first()
         .ok_or(error_message("wrong arity"))
         .and_then(|arg| {
-            match *arg {
-                Ast::Boolean(true) => Ok(Ast::Boolean(true)),
-                _ => Ok(Ast::Boolean(false)),
+            match **arg {
+                LispType::Boolean(true) => Ok(new_boolean(true)),
+                _ => Ok(new_boolean(false)),
             }
         })
 }
 
 // false?: takes a single argument and returns true (mal true value) if the argument is a false value (mal false value).
-fn is_false(args: Vec<Ast>) -> EvaluationResult {
+fn is_false(args: Seq) -> EvaluationResult {
     args.first()
         .ok_or(error_message("wrong arity"))
         .and_then(|arg| {
-            match *arg {
-                Ast::Boolean(false) => Ok(Ast::Boolean(true)),
-                _ => Ok(Ast::Boolean(false)),
+            match **arg {
+                LispType::Boolean(false) => Ok(new_boolean(true)),
+                _ => Ok(new_boolean(false)),
             }
         })
 }
 
 // symbol?: takes a single argument and returns true (mal true value) if the argument is a symbol (mal symbol value).
-fn is_symbol(args: Vec<Ast>) -> EvaluationResult {
+fn is_symbol(args: Seq) -> EvaluationResult {
     args.first()
         .ok_or(error_message("wrong arity"))
         .and_then(|arg| {
-            match *arg {
-                Ast::Symbol(_) => Ok(Ast::Boolean(true)),
-                _ => Ok(Ast::Boolean(false)),
+            match **arg {
+                LispType::Symbol(_) => Ok(new_boolean(true)),
+                _ => Ok(new_boolean(false)),
             }
         })
 }
 
 // readline takes a string that is used to prompt the user for input. The line of text entered by the user is returned as a string. If the user sends an end-of-file (usually Ctrl-D), then nil is returned.
-fn readline(args: Vec<Ast>) -> EvaluationResult {
+fn readline(args: Seq) -> EvaluationResult {
     args.first()
         .ok_or(error_message("not enough arguments to readline"))
         .and_then(|arg| {
-            match *arg {
-                Ast::String(ref s) => {
-                    let mut rdr = readline::Reader::new(s.clone());
+            match **arg {
+                LispType::String(ref s) => {
+                    let mut rdr = readline::Reader::new(s);
                     let result = match rdr.read() {
-                        Some(line) => Ast::String(line.clone()),
-                        None => Ast::Nil,
+                        Some(line) => new_string(&line),
+                        None => new_nil(),
                     };
                     Ok(result)
                 },
@@ -616,37 +616,41 @@ fn readline(args: Vec<Ast>) -> EvaluationResult {
 
 
 // atom: Takes a Mal value and returns a new atom which points to that Mal value.
-fn atom(args: Vec<Ast>) -> Option<Ast> {
-    args.first().and_then(|arg| {
-        Ast::Atom(RefCell::new(Box::new(arg.clone()))).into()
-    })
+fn atom(args: Seq) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|arg| {
+            Ok(new_atom(arg.clone()))
+        })
 }
 
 // atom?: Takes an argument and returns true if the argument is an atom.
-fn is_atom(args: Vec<Ast>) -> Option<Ast> {
+fn is_atom(args: Seq) -> EvaluationResult {
     args.first()
+        .ok_or(error_message("wrong arity"))
         .and_then(|a| {
-            let is = match a.clone() {
-                Ast::Atom(_) => true,
-                _ => false,
+            let is_atom = if let LispType::Atom(_) = **a {
+                true
+            } else {
+                false
             };
-            Ast::Boolean(is).into()
+            Ok(new_boolean(is_atom))
         })
 }
 
 // deref: Takes an atom argument and returns the Mal value referenced by this atom.
-fn deref(args: Vec<Ast>) -> Option<Ast> {
+fn deref(args: Seq) -> EvaluationResult {
     if args.len() == 0 {
-        return None;
+        return Err(EvaluationError::WrongArity(new_nil())) // fix argument here
     }
 
-    let arg = args[0].clone();
-    match arg {
-        Ast::Atom(atom) => {
-            let val = atom.into_inner();
-            Some(*val)
+    let arg = &args[0];
+    match **arg {
+        LispType::Atom(ref atom) => {
+            let val = atom.borrow();
+            Ok(val.clone())
         }
-        _ => None,
+        _ => Err(error_message("wrong type of argument to deref"))
     }
 }
 
@@ -673,7 +677,7 @@ fn reset(args: Vec<Ast>) -> Option<Ast> {
     })
 }
 
-// swap!: Takes an atom, a function, and zero or more function arguments. The atom's value is modified to the result of applying the function with the atom's value as the first argument and the optionally given function arguments as the rest of the arguments. The new atom's value is returned. (Side note: Mal is single-threaded, but in concurrent languages like Clojure, swap! promises atomic update: (swap! myatom (fn* [x] (+ 1 x))) will always increase the myatom counter by one and will not suffer from missing updates when the atom is updated from multiple threads.)
+// swap!: Takes an atom, a function, and zero or more function arguments. The atom's value is modified to the result of applying the function with the atom's value as the first argument and the optionally given function arguments as the rest of the arguments. The new atom's value is returned.
 // (swap! myatom (fn* [x y] (+ 1 x y)) 22)
 fn swap(args: Vec<Ast>) -> Option<Ast> {
     args.split_first().and_then(|(atom, rest)| {

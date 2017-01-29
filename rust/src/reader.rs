@@ -1,8 +1,8 @@
 use regex::{Regex, Captures};
-use types::Ast;
+use types::{LispValue, new_symbol, new_list, new_nil, new_boolean, new_number, new_string};
 use error::ReaderError;
 
-pub type ReaderResult = ::std::result::Result<Ast, ReaderError>;
+pub type ReaderResult = ::std::result::Result<LispValue, ReaderError>;
 
 pub fn read(input: String) -> ReaderResult {
     let tokens = tokenizer(input);
@@ -116,11 +116,11 @@ fn test_read_form() {
 
 macro_rules! macroexpand {
     ( $literal:expr, $reader:expr, $result:expr ) => {{
-        let mut seq = vec![Ast::Symbol($literal.to_string())];
+        let mut seq = vec![new_symbol($literal)];
         let _ = $reader.next();
         if let Ok(next) = read_form($reader) {
             seq.push(next);
-            $result = Ok(Ast::List(seq));
+            $result = Ok(new_list(seq));
         }
     }};
 }
@@ -175,7 +175,7 @@ fn read_list(reader: &mut Reader) -> ReaderResult {
     let _ = reader.next();
     let mut in_list = true;
 
-    let mut list: Vec<Ast> = vec![];
+    let mut list: Vec<LispValue> = vec![];
 
     while let Some(token) = reader.peek() {
         match token {
@@ -196,7 +196,7 @@ fn read_list(reader: &mut Reader) -> ReaderResult {
         return Err(ReaderError::Message("did not close list properly".to_string()));
     }
 
-    Ok(Ast::List(list))
+    Ok(new_list(list))
 }
 
 fn read_atom(reader: &mut Reader) -> ReaderResult {
@@ -221,7 +221,7 @@ fn read_atom(reader: &mut Reader) -> ReaderResult {
 
 fn nil_from(token: &str) -> ReaderResult {
     match token {
-            "nil" => Some(Ast::Nil),
+            "nil" => Some(new_nil()),
             _ => None,
         }
         .ok_or(ReaderError::Message("could not parse nil".to_string()))
@@ -229,13 +229,13 @@ fn nil_from(token: &str) -> ReaderResult {
 
 fn boolean_from(token: &str) -> ReaderResult {
     token.parse::<bool>()
-        .map(Ast::Boolean)
+        .map(new_boolean)
         .map_err(|_| ReaderError::Message("could not parse boolean from this token".to_string()))
 }
 
 fn number_from(token: &str) -> ReaderResult {
     token.parse::<i64>()
-        .map(Ast::Number)
+        .map(new_number)
         .map_err(|_| ReaderError::Message("could not parse number from this token".to_string()))
 }
 
@@ -246,7 +246,7 @@ fn string_from(token: &str) -> ReaderResult {
 
     if STRING.is_match(token) {
             let new_str = &token[1..token.len() - 1];
-            Some(Ast::String(read_str(new_str)))
+            Some(new_string(&read_str(new_str)))
         } else {
             None
         }
@@ -266,5 +266,5 @@ fn read_str(s: &str) -> String {
 }
 
 fn symbol_from(token: &str) -> ReaderResult {
-    Ok(Ast::Symbol(token.to_string()))
+    Ok(new_symbol(token))
 }

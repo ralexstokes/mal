@@ -1,7 +1,7 @@
 use std::fmt;
 use std::rc::Rc;
 use std::cell::RefCell;
-use types::Ast;
+use types::LispValue;
 use ns;
 
 pub type Env = Rc<RefCell<EnvData>>;
@@ -32,11 +32,11 @@ pub fn empty_from(outer: Env) -> Env {
 }
 
 impl EnvData {
-    pub fn set(&mut self, key: String, val: Ast) {
+    pub fn set(&mut self, key: String, val: LispValue) {
         self.bindings.insert(key, val);
     }
 
-    pub fn get(&self, key: &str) -> Option<Ast> {
+    pub fn get(&self, key: &str) -> Option<LispValue> {
         self.bindings
             .get(key)
             .and_then(|val| Some(val.clone()))
@@ -84,16 +84,17 @@ pub fn root(env: &Env) -> Env {
 
 #[test]
 fn test_nesting() {
+    use types::{LispType, new_symbol};
     let one = empty();
-    one.borrow_mut().set("a".to_string(), Ast::Symbol("a".to_string()));
+    one.borrow_mut().set("a".to_string(), new_symbol("a"));
     let two = empty_from(one.clone());
-    two.borrow_mut().set("b".to_string(), Ast::Symbol("b".to_string()));
+    two.borrow_mut().set("b".to_string(), new_symbol("b"));
 
     let onea = one.borrow().get(&"a".to_string());
     match onea {
         Some(x) => {
-            match x {
-                Ast::Symbol(ref s) => assert!(s.as_str() == "a"),
+            match *x {
+                LispType::Symbol(ref s) => assert!(s.as_str() == "a"),
                 _ => panic!("wrong ast type"),
             }
         }
@@ -106,8 +107,8 @@ fn test_nesting() {
     let twob = two.borrow().get(&"b".to_string());
     match twob {
         Some(x) => {
-            match x {
-                Ast::Symbol(ref s) => assert!(s.as_str() == "b"),
+            match *x {
+                LispType::Symbol(ref s) => assert!(s.as_str() == "b"),
                 _ => panic!("wrong ast type"),
             }
         }
@@ -116,8 +117,8 @@ fn test_nesting() {
     let twoa = two.borrow().get(&"a".to_string());
     match twoa {
         Some(x) => {
-            match x {
-                Ast::Symbol(ref s) => assert!(s.as_str() == "a"),
+            match *x {
+                LispType::Symbol(ref s) => assert!(s.as_str() == "a"),
                 _ => panic!("wrong ast type"),
             }
         }

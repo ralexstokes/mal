@@ -1,14 +1,14 @@
 use std::fmt;
 use std::convert::From;
-use types::Ast;
+use types::LispValue;
 
 #[derive(Debug)]
 pub enum EvaluationError {
-    WrongArity(Ast),
-    BadArguments(Ast),
+    WrongArity(LispValue),
+    BadArguments(LispValue),
     MissingSymbol(String),
     Message(String),
-    Exception(Ast),
+    Exception(LispValue),
 }
 
 impl From<EvaluationError> for Error {
