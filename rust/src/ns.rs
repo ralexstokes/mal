@@ -100,6 +100,7 @@ pub fn core() -> Ns {
                                                      ("deref", deref),
                                                      ("reset!", reset),
                                                      ("swap!", swap),
+                                                     ("symbol", symbol),
                                                      ("keyword", keyword),
                                                      ("keyword?", is_keyword),
     ];
@@ -716,6 +717,19 @@ fn swap(args: Seq) -> EvaluationResult {
                         _ => Err(error_message("wront type of arguments to swap!"))
                     }
                 })
+        })
+}
+
+// ** symbol: takes a string and returns a new symbol with the string as its name.
+fn symbol(args: Seq) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|s| {
+            if let LispType::String(ref s) = **s {
+                Ok(new_symbol(s))
+            } else {
+                Err(error_message("wrong type to symbol"))
+            }
         })
 }
 
