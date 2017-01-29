@@ -9,7 +9,6 @@ use std::fs::File;
 use eval::{eval, apply_lambda};
 use readline;
 
-
 pub type Ns = HashMap<String, LispValue>;
 
 pub fn new(bindings: Vec<(String, LispValue)>) -> Ns {
