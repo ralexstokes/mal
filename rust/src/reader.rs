@@ -1,5 +1,6 @@
 use regex::{Regex, Captures};
-use types::{LispValue, new_symbol, new_list, new_nil, new_boolean, new_number, new_string};
+use types::{LispValue, new_symbol, new_list, new_nil, new_boolean, new_number, new_string,
+            new_keyword};
 use error::ReaderError;
 
 pub type ReaderResult = ::std::result::Result<LispValue, ReaderError>;
@@ -197,6 +198,7 @@ fn read_atom(reader: &mut Reader) -> ReaderResult {
                     nil_from(s)
                         .or(boolean_from(s))
                         .or(number_from(s))
+                        .or(keyword_from(s))
                         .or(string_from(s))
                         .or(symbol_from(s))
                 }
@@ -226,6 +228,17 @@ fn number_from(token: &str) -> ReaderResult {
     token.parse::<i64>()
         .map(new_number)
         .map_err(|_| ReaderError::Message("could not parse number from this token".to_string()))
+}
+
+fn keyword_from(token: &str) -> ReaderResult {
+    lazy_static! {
+        static ref KEYWORD: Regex = Regex::new(r#"^:(.*)$"#).unwrap();
+    }
+
+    KEYWORD.captures(token)
+        .and_then(|caps| caps.at(0))
+        .ok_or(ReaderError::Message("could not parse keyword properly".to_string()))
+        .and_then(|k| Ok(new_keyword(k)))
 }
 
 fn string_from(token: &str) -> ReaderResult {

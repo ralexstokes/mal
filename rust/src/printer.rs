@@ -17,6 +17,7 @@ pub fn pr_str(value: LispValue, readably: bool) -> String {
             }
         }
         LispType::Number(n) => n.to_string(),
+        LispType::Keyword(ref s) => unread_keyword(s),
         LispType::Symbol(ref s) => s.clone(),
         LispType::List(ref seq) => {
             let results = seq.into_iter()
@@ -54,6 +55,10 @@ fn unread_str(s: &str) -> String {
     }
     t.push('"');
     t
+}
+
+fn unread_keyword(s: &str) -> String {
+    format!(":{}", s)
 }
 
 #[cfg(test)]

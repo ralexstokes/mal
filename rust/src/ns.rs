@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::result::Result;
-use types::{LispValue, LispType, HostFn, EvaluationResult, Seq, new_list, new_fn, new_number, new_nil, new_string, new_atom, new_boolean};
+use types::{LispValue, LispType, HostFn, EvaluationResult, Seq, new_list, new_fn, new_number, new_nil, new_string, new_atom, new_boolean, new_symbol, new_keyword};
 use error::{error_message, ReaderError, EvaluationError};
 use printer;
 use reader;
@@ -100,6 +100,8 @@ pub fn core() -> Ns {
                                                      ("deref", deref),
                                                      ("reset!", reset),
                                                      ("swap!", swap),
+                                                     ("keyword", keyword),
+                                                     ("keyword?", is_keyword),
     ];
     let bindings = mappings.iter()
         .map(|&(k, v)| (k.to_string(), new_fn(v)))
@@ -714,5 +716,32 @@ fn swap(args: Seq) -> EvaluationResult {
                         _ => Err(error_message("wront type of arguments to swap!"))
                     }
                 })
+        })
+}
+
+// ** keyword: takes a string and returns a keyword with the same name (usually just be prepending the special keyword unicode symbol). This function should also detect if the argument is already a keyword and just return it.
+fn keyword(args: Seq) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|k| {
+            if let LispType::String(ref s) = **k {
+                Ok(new_keyword(s))
+            } else {
+                Err(error_message("wrong type to symbol"))
+            }
+        })
+}
+
+// ** keyword?: takes a single argument and returns true (mal true value) if the argument is a keyword, otherwise returns false (mal false value).
+fn is_keyword(args: Seq) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|k| {
+            let is_keyword = if let LispType::Keyword(_) = **k {
+                true
+            } else {
+                false
+            };
+            Ok(new_boolean(is_keyword))
         })
 }

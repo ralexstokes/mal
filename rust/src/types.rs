@@ -14,6 +14,7 @@ pub enum LispType {
     Nil,
     Boolean(bool),
     String(String),
+    Keyword(String),
     Number(i64),
     Symbol(String),
     Lambda {
@@ -78,6 +79,10 @@ pub fn new_atom(atom: LispValue) -> LispValue {
     value_of(LispType::Atom(RefCell::new(atom)))
 }
 
+pub fn new_keyword(s: &str) -> LispValue {
+    value_of(LispType::Keyword(s.to_string()))
+}
+
 impl fmt::Display for LispType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // TODO need an RC just to satisfy the type here?
@@ -94,6 +99,7 @@ impl PartialEq for LispType {
             (&String(ref s), &String(ref t)) if s == t => true,
             (&Number(x), &Number(y)) if x == y => true,
             (&Symbol(ref s), &Symbol(ref t)) if s == t => true,
+            (&Keyword(ref s), &Keyword(ref t)) => s == t,
             (&Lambda { .. }, &Lambda { .. }) => false,
             (&Fn(f), &Fn(g)) if f == g => true,
             (&List(ref xs), &List(ref ys)) => xs == ys,
