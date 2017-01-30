@@ -95,6 +95,6 @@ impl Repl {
     pub fn rep(&mut self, input: String, env: env::Env) -> ReplResult {
         let ast = try!(read(input));
         let val = try!(eval(ast, env));
-        Ok(print(val))
+        Ok(print(&val))
     }
 }

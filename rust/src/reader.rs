@@ -1,7 +1,7 @@
 use regex::{Regex, Captures};
-use types::{LispValue, new_symbol, new_list, new_nil, new_boolean, new_number, new_string,
-            new_keyword};
-use error::ReaderError;
+use types::{LispValue, Seq, new_symbol, new_list, new_nil, new_boolean, new_number, new_string,
+            new_keyword, new_vector, new_map_from_seq};
+use error::{ReaderError, EvaluationError};
 
 pub type ReaderResult = ::std::result::Result<LispValue, ReaderError>;
 
@@ -33,11 +33,19 @@ fn test_tokenizer() {
 }
 
 #[derive(Debug,Clone)]
-pub enum Token {
-    OpenList,
-    CloseList,
+enum Token {
+    List(Direction),
+    Vector(Direction),
+    Map(Direction),
     Atom(String),
     Comment,
+}
+
+// Direction indicates if the wrapping token is opening or closing its extent.
+#[derive(Debug,Clone)]
+enum Direction {
+    Open,
+    Close,
 }
 
 fn token_from(capture: Captures) -> Token {
@@ -49,14 +57,18 @@ fn token_from(capture: Captures) -> Token {
     }
 
     match c {
-        "(" | "[" => Token::OpenList,
-        ")" | "]" => Token::CloseList,
+        "(" => Token::List(Direction::Open),
+        ")" => Token::List(Direction::Close),
+        "[" => Token::Vector(Direction::Open),
+        "]" => Token::Vector(Direction::Close),
+        "{" => Token::Map(Direction::Open),
+        "}" => Token::Map(Direction::Close),
         _ => Token::Atom(c.to_string()),
     }
 }
 
 #[derive(Debug)]
-pub struct Reader {
+struct Reader {
     tokens: Vec<Token>,
     current_token: Option<Token>,
     position: usize,
@@ -131,6 +143,9 @@ fn read_form(reader: &mut Reader) -> ReaderResult {
 
     while let Some(token) = reader.peek() {
         match token {
+            Token::Comment => {
+                let _ = reader.next();
+            }
             Token::Atom(ref value) => {
                 match value.as_str() {
                     "'" => macroexpand!("quote", reader, result),
@@ -148,45 +163,84 @@ fn read_form(reader: &mut Reader) -> ReaderResult {
                 }
                 break;
             }
-            Token::OpenList => {
-                result = read_list(reader);
-                break;
+            Token::List(dir) => {
+                match dir {
+                    Direction::Open => {
+                        result = read_list(reader);
+                        break;
+                    }
+                    Direction::Close => break,
+                }
             }
-            Token::CloseList => break,
-            Token::Comment => {
-                let _ = reader.next();
+            Token::Vector(dir) => {
+                match dir {
+                    Direction::Open => {
+                        result = read_vector(reader);
+                        break;
+                    }
+                    Direction::Close => break,
+                }
+            }
+            Token::Map(dir) => {
+                match dir {
+                    Direction::Open => {
+                        result = read_map(reader);
+                        break;
+                    }
+                    Direction::Close => break,
+                }
             }
         }
     }
     result
 }
 
-fn read_list(reader: &mut Reader) -> ReaderResult {
+fn read_seq(reader: &mut Reader) -> Result<Seq, ReaderError> {
     let _ = reader.next();
-    let mut in_list = true;
+    let mut in_seq = true;
 
-    let mut list: Vec<LispValue> = vec![];
+    let mut seq: Vec<LispValue> = vec![];
 
     while let Some(token) = reader.peek() {
         match token {
-            Token::CloseList => {
+            Token::List(Direction::Close) |
+            Token::Vector(Direction::Close) |
+            Token::Map(Direction::Close) => {
                 let _ = reader.next();
-                in_list = false;
+                in_seq = false;
                 break;
             }
             _ => {
-                if let Ok(ast) = read_form(reader) {
-                    list.push(ast);
+                if let Ok(form) = read_form(reader) {
+                    seq.push(form);
                 }
             }
         }
     }
 
-    if in_list {
-        return Err(ReaderError::Message("did not close list properly".to_string()));
+    if in_seq {
+        return Err(ReaderError::Message("did not close seq properly".to_string()));
     }
 
-    Ok(new_list(list))
+    Ok(seq)
+}
+
+fn read_list(reader: &mut Reader) -> ReaderResult {
+    read_seq(reader).and_then(|seq| Ok(new_list(seq)))
+}
+
+fn read_vector(reader: &mut Reader) -> ReaderResult {
+    read_seq(reader).and_then(|seq| Ok(new_vector(seq)))
+}
+
+fn read_map(reader: &mut Reader) -> ReaderResult {
+    read_seq(reader).and_then(|seq| {
+        match new_map_from_seq(seq) {
+            Ok(map) => Ok(map),
+            Err(EvaluationError::Message(ref s)) => Err(ReaderError::Message(s.clone())),
+            _ => Err(ReaderError::Message("could not read map".to_string())),
+        }
+    })
 }
 
 fn read_atom(reader: &mut Reader) -> ReaderResult {
@@ -236,6 +290,9 @@ fn keyword_from(token: &str) -> ReaderResult {
     }
 
     KEYWORD.captures(token)
+    // NOTE: Want to only store the suffix, caps.at(1)
+    // However, it is pretty straightforward to hack around
+    // defects in the current map impl if we keep it for now
         .and_then(|caps| caps.at(0))
         .ok_or(ReaderError::Message("could not parse keyword properly".to_string()))
         .and_then(|k| Ok(new_keyword(k)))

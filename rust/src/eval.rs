@@ -1,4 +1,5 @@
-use types::{LispValue, LispType, Seq, EvaluationResult, new_symbol, new_list, new_nil, new_lambda};
+use types::{LispValue, LispType, Seq, EvaluationResult, new_symbol, new_list, new_nil, new_lambda,
+            new_vector, Assoc, new_map_from_fn};
 use std::result::Result;
 use error::{error_message, EvaluationError};
 use ns;
@@ -9,6 +10,8 @@ pub fn eval(val: LispValue, env: Env) -> EvaluationResult {
         match *val {
             LispType::Symbol(ref s) => eval_symbol(s, env),
             LispType::List(ref seq) => eval_list(seq.to_vec(), env),
+            LispType::Vector(ref seq) => eval_vector(seq.to_vec(), env),
+            LispType::Map(ref map) => eval_map(map, env),
             _ => eval_self_evaluating(val.clone()),
         }
     })
@@ -68,7 +71,7 @@ fn eval_list(seq: Seq, env: Env) -> EvaluationResult {
         })
 }
 
-fn eval_ops(operands: Seq, env: Env) -> Result<Seq, EvaluationError> {
+fn eval_seq(operands: Seq, env: Env) -> Result<Seq, EvaluationError> {
     let mut result = vec![];
     for operand in operands.iter() {
         let evop = try!(eval(operand.clone(), env.clone()));
@@ -78,7 +81,7 @@ fn eval_ops(operands: Seq, env: Env) -> Result<Seq, EvaluationError> {
 }
 
 fn apply(operator: LispValue, operands: Seq, env: Env) -> EvaluationResult {
-    eval_ops(operands, env.clone()).and_then(|evops| {
+    eval_seq(operands, env.clone()).and_then(|evops| {
         eval(operator, env.clone()).and_then(|evop| {
             match *evop {
                 LispType::Lambda { ref params, ref body, ref env, .. } => {
@@ -108,6 +111,17 @@ fn eval_sequence(seq: Seq, env: Env) -> EvaluationResult {
     } else {
         Err(EvaluationError::Message("could not eval sequence".to_string()))
     }
+}
+
+fn eval_vector(seq: Seq, env: Env) -> EvaluationResult {
+    eval_seq(seq, env).and_then(|seq| Ok(new_vector(seq)))
+}
+
+fn eval_map(map: &Assoc, env: Env) -> EvaluationResult {
+    new_map_from_fn(map, |k, v| {
+        let ev = try!(eval(v, env.clone()));
+        Ok((k, ev))
+    })
 }
 
 fn eval_if(seq: Seq, env: Env) -> EvaluationResult {
@@ -208,7 +222,7 @@ fn eval_lambda(seq: Seq, env: Env) -> EvaluationResult {
 
 // guest eval
 fn eval_eval(seq: Seq, env: Env) -> EvaluationResult {
-    eval_ops(seq, env.clone()).and_then(|seq| {
+    eval_seq(seq, env.clone()).and_then(|seq| {
         // grab reference to root env in case we are
         // `eval`ing inside a temporary env (e.g. lambda, let)
         // otherwise, we will drop the new env frames after leaving
@@ -245,6 +259,7 @@ fn eval_quasiquote(seq: Seq, env: Env) -> EvaluationResult {
 fn eval_quasiquote_for(arg: &LispValue, env: Env) -> EvaluationResult {
     let arg_elems = match **arg {
         LispType::List(ref seq) if !seq.is_empty() => seq.to_vec(),
+        LispType::Vector(ref seq) if !seq.is_empty() => seq.to_vec(),
         _ => {
             let mut result: Seq = vec![];
             result.push(new_symbol("quote"));
@@ -295,6 +310,48 @@ fn eval_quasiquote_for(arg: &LispValue, env: Env) -> EvaluationResult {
                                         result.push(first.clone());
                                         result.push(second.clone());
                                         Ok(new_list(result))
+                                    })
+                                })
+                                .ok() // TODO -- do not lose errors
+                        }
+                    }
+                })
+                .ok_or(EvaluationError::BadArguments(arg.clone()))
+        }
+        LispType::Vector(ref seq) if !seq.is_empty() => {
+            // duplicate of above; TODO refactor
+            seq.split_first()
+                .and_then(|(first, rest)| {
+                    match **first {
+                        LispType::Symbol(ref s) if s == "splice-unquote" => {
+                            rest.first()
+                                .and_then(|second| {
+                                    let mut result: Seq = vec![];
+                                    result.push(new_symbol("concat"));
+                                    result.push(second.clone());
+
+                                    let rest = arg_elems[1..].to_vec();
+                                    let next = new_list(rest);
+
+                                    eval_quasiquote_for(&next, env.clone())
+                                        .and_then(|vals| {
+                                            result.push(vals);
+                                            Ok(new_list(result))
+                                        })
+                                        .ok()
+                                })
+                        }
+                        _ => {
+                            eval_quasiquote_for(&arg_elems[0], env.clone())
+                                .and_then(|first| {
+                                    let rest = arg_elems[1..].to_vec();
+                                    let next = new_list(rest);
+                                    eval_quasiquote_for(&next, env.clone()).and_then(|second| {
+                                        let mut result: Seq = vec![];
+                                        result.push(new_symbol("cons"));
+                                        result.push(first.clone());
+                                        result.push(second.clone());
+                                        Ok(new_vector(result))
                                     })
                                 })
                                 .ok() // TODO -- do not lose errors

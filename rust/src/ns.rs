@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::result::Result;
-use types::{LispValue, LispType, HostFn, EvaluationResult, Seq, new_list, new_fn, new_number, new_nil, new_string, new_atom, new_boolean, new_symbol, new_keyword};
+use types::{LispValue, LispType, HostFn, EvaluationResult, Seq, new_list, new_fn, new_number, new_nil, new_string, new_atom, new_boolean, new_symbol, new_keyword, new_vector, new_map, new_map_from_seq, Assoc};
 use error::{error_message, ReaderError, EvaluationError};
 use printer;
 use reader;
@@ -95,14 +95,25 @@ pub fn core() -> Ns {
                                                      ("false?", is_false),
                                                      ("symbol?", is_symbol),
                                                      ("readline", readline),
-                                                     ("atom", atom),
+                                                     ("atom", to_atom),
                                                      ("atom?", is_atom),
                                                      ("deref", deref),
                                                      ("reset!", reset),
                                                      ("swap!", swap),
-                                                     ("symbol", symbol),
-                                                     ("keyword", keyword),
+                                                     ("symbol", to_symbol),
+                                                     ("keyword", to_keyword),
                                                      ("keyword?", is_keyword),
+                                                     ("vector", to_vector),
+                                                     ("vector?", is_vector),
+                                                     ("sequential?", is_seq),
+                                                     ("hash-map", to_map),
+                                                     ("map?", is_map),
+                                                     ("assoc", assoc),
+                                                     ("dissoc", dissoc),
+                                                     ("get", get),
+                                                     ("contains?", contains),
+                                                     ("keys", keys),
+                                                     ("vals", vals),
     ];
     let bindings = mappings.iter()
         .map(|&(k, v)| (k.to_string(), new_fn(v)))
@@ -172,7 +183,7 @@ fn div(seq: Seq) -> EvaluationResult {
 
 fn string_of(args: Seq, readably: bool, separator: &str) -> String {
     args.iter()
-        .map(|p| printer::pr_str(p.clone(), readably))
+        .map(|p| printer::pr_str(p, readably))
         .collect::<Vec<_>>()
         .join(separator)
 }
@@ -352,6 +363,13 @@ fn cons(args: Seq) -> EvaluationResult {
 
                             new_list(elems).into()
                         },
+                        LispType::Vector(ref seq) => {
+                            for s in seq {
+                                elems.push(s.clone())
+                            }
+
+                            new_list(elems).into()
+                        },
                         _ => None
                     }
                 })
@@ -366,6 +384,11 @@ fn concat(args: Seq) -> EvaluationResult {
     for arg in args {
         match *arg {
             LispType::List(ref seq) => {
+                for s in seq {
+                    result.push(s.clone());
+                }
+            },
+            LispType::Vector(ref seq) => {
                 for s in seq {
                     result.push(s.clone());
                 }
@@ -618,7 +641,7 @@ fn readline(args: Seq) -> EvaluationResult {
 
 
 // atom: Takes a Mal value and returns a new atom which points to that Mal value.
-fn atom(args: Seq) -> EvaluationResult {
+fn to_atom(args: Seq) -> EvaluationResult {
     args.first()
         .ok_or(error_message("wrong arity"))
         .and_then(|arg| {
@@ -714,14 +737,14 @@ fn swap(args: Seq) -> EvaluationResult {
                                 _ => Err(error_message("wrong type of arguments to swap!")),
                             }
                         },
-                        _ => Err(error_message("wront type of arguments to swap!"))
+                        _ => Err(error_message("wrong type of arguments to swap!"))
                     }
                 })
         })
 }
 
 // ** symbol: takes a string and returns a new symbol with the string as its name.
-fn symbol(args: Seq) -> EvaluationResult {
+fn to_symbol(args: Seq) -> EvaluationResult {
     args.first()
         .ok_or(error_message("wrong arity"))
         .and_then(|s| {
@@ -734,7 +757,7 @@ fn symbol(args: Seq) -> EvaluationResult {
 }
 
 // ** keyword: takes a string and returns a keyword with the same name (usually just be prepending the special keyword unicode symbol). This function should also detect if the argument is already a keyword and just return it.
-fn keyword(args: Seq) -> EvaluationResult {
+fn to_keyword(args: Seq) -> EvaluationResult {
     args.first()
         .ok_or(error_message("wrong arity"))
         .and_then(|k| {
@@ -757,5 +780,161 @@ fn is_keyword(args: Seq) -> EvaluationResult {
                 false
             };
             Ok(new_boolean(is_keyword))
+        })
+}
+
+// vector: takes a variable number of arguments and returns a vector containing those arguments.
+fn to_vector(args: Seq) -> EvaluationResult {
+    Ok(new_vector((args)))
+}
+
+// vector?: takes a single argument and returns true (mal true value) if the argument is a vector, otherwise returns false (mal false value).
+fn is_vector(args: Seq) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|v| {
+            let is_vector = if let LispType::Vector(_) = **v {
+                true
+            } else {
+                false
+            };
+            Ok(new_boolean(is_vector))
+        })
+}
+
+// sequential?: takes a single arguments and returns true (mal true value) if it is a list or a vector, otherwise returns false (mal false value).
+fn is_seq(args: Seq) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|s| {
+            let is_seq = match **s {
+                LispType::List(_) => true,
+                LispType::Vector(_) => true,
+                _ => false,
+            };
+            Ok(new_boolean(is_seq))
+        })
+}
+
+// hash-map: takes a variable but even number of arguments and returns a new mal hash-map value with keys from the odd arguments and values from the even arguments respectively. This is basically the functional form of the {} reader literal syntax.
+fn to_map(args: Seq) -> EvaluationResult {
+    new_map_from_seq(args)
+}
+
+// map?: takes a single argument and returns true (mal true value) if the argument is a hash-map, otherwise returns false (mal false value).
+fn is_map(args: Seq) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity"))
+        .and_then(|m| {
+            let is_assoc = match **m {
+                LispType::Map(_) => true,
+                _ => false,
+            };
+            Ok(new_boolean(is_assoc))
+        })
+}
+
+// assoc: takes a hash-map as the first argument and the remaining arguments are odd/even key/value pairs to "associate" (merge) into the hash-map. Note that the original hash-map is unchanged (remember, mal values are immutable), and a new hash-map containing the old hash-maps key/values plus the merged key/value arguments is returned.
+fn assoc(args: Seq) -> EvaluationResult {
+    args.split_first()
+        .ok_or(error_message("wrong arity to assoc"))
+        .and_then(|(map, rest)| {
+            match **map {
+                LispType::Map(ref map) => {
+                    let mut new = try!(Assoc::from_seq(rest.to_vec()));
+                    try!(new.merge(map));
+                    Ok(new_map(new))
+                },
+                _ => Err(error_message("wrong type of arguments to assoc"))
+            }
+        })
+}
+
+// dissoc: takes a hash-map and a list of keys to remove from the hash-map. Again, note that the original hash-map is unchanged and a new hash-map with the keys removed is returned. Key arguments that do not exist in the hash-map are ignored.
+fn dissoc(args: Seq) -> EvaluationResult {
+    args.split_first()
+        .ok_or(error_message("wrong arity to dissoc"))
+        .and_then(|(map, keys)| {
+            match **map {
+                LispType::Map(ref map) => {
+                    let mut new = map.clone();
+
+                    for key in keys.iter() {
+                        match **key {
+                            LispType::String(ref s) |
+                            LispType::Keyword(ref s) => {
+                                new.remove(s);
+                            }
+                            _ => return Err(error_message("wrong type of arguments to dissoc"))
+                        }
+                    }
+
+                    Ok(new_map(new))
+                },
+                _ => Err(error_message("wrong type of arguments to dissoc"))
+            }
+        })
+}
+
+// get: takes a hash-map and a key and returns the value of looking up that key in the hash-map. If the key is not found in the hash-map then nil is returned.
+fn get(args: Seq) -> EvaluationResult {
+    args.split_first()
+        .ok_or(error_message("wrong arity to get"))
+        .and_then(|(map, rest)| {
+            rest.split_first()
+                .ok_or(error_message("wrong arity to get"))
+                .and_then(|(key, _)| {
+                    match **map {
+                        LispType::Map(ref map) => {
+                            map.get(key).or(Ok(new_nil()))
+                        },
+                        _ => Err(error_message("wrong type of arguments to get"))
+                    }
+                })
+        })
+}
+
+// contains?: takes a hash-map and a key and returns true (mal true value) if the key exists in the hash-map and false (mal false value) otherwise.
+fn contains(args: Seq) -> EvaluationResult {
+    args.split_first()
+        .ok_or(error_message("wrong arity to contains?"))
+        .and_then(|(map, rest)| {
+            rest.split_first()
+                .ok_or(error_message("wrong arity to contains?"))
+                .and_then(|(key, _)| {
+                    match **map {
+                        LispType::Map(ref map) => {
+                            map.contains(key)
+                        },
+                        _ => Err(error_message("wrong type of arguments to contains?"))
+                    }
+                })
+        })
+}
+
+// keys: takes a hash-map and returns a list (mal list value) of all the keys in the hash-map.
+fn keys(args: Seq) -> EvaluationResult {
+    args.split_first()
+        .ok_or(error_message("wrong arity to keys"))
+        .and_then(|(map, _)| {
+            match **map {
+                LispType::Map(ref map) => {
+                    map.keys()
+                },
+                _ => Err(error_message("wrong type of arguments to keys"))
+            }
+        })
+}
+// vals: takes a hash-map and returns a list (mal list value) of all the values in the hash-map.
+fn vals(args: Seq) -> EvaluationResult {
+    args.split_first()
+        .ok_or(error_message("wrong arity to vals"))
+        .and_then(|(map, _)| {
+            match **map {
+                LispType::Map(ref map) => {
+                    map.vals()
+                },
+                _ => Err(error_message("wrong type of arguments to vals"))
+            }
         })
 }
