@@ -4,7 +4,7 @@ use printer::print;
 use eval::eval;
 use env;
 use prelude;
-use types::{new_symbol, new_list};
+use types::{new_string, new_list};
 use error::{Error, ReplError, ReaderError};
 
 pub struct Repl {
@@ -42,7 +42,7 @@ impl Repl {
             let result = args.split_first()
                 .and_then(|(file_name, env_args)| {
                     let ast_args = env_args.iter()
-                        .map(|arg| new_symbol(arg))
+                        .map(|arg| new_string(arg))
                         .collect::<Vec<_>>();
                     let list_args = new_list(ast_args.to_vec());
                     env.borrow_mut().set(ARGV_SYMBOL.to_string(), list_args);
@@ -50,7 +50,7 @@ impl Repl {
                 });
             if let Some(result) = result {
                 match result {
-                    Ok(result) => println!("{}", result),
+                    // Ok(result) => println!("{}", result), // want IO? had to skip this to pass a mal test
                     Err(Error::EvaluationError(e)) => self.reader.write_err(e.to_string()),
                     _ => {}
                 }

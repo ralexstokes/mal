@@ -236,7 +236,8 @@ fn is_empty(args: Seq) -> EvaluationResult {
     args.first()
         .and_then(|a| {
             match **a {
-                LispType::List(ref seq) => new_boolean(seq.is_empty()).into(),
+                LispType::List(ref seq) |
+                LispType::Vector(ref seq)=> new_boolean(seq.is_empty()).into(),
                 _ => None,
             }
         })
@@ -247,7 +248,8 @@ fn count_of(args: Seq) -> EvaluationResult {
     args.first()
         .and_then(|a| {
             match **a {
-                LispType::List(ref seq) => new_number(seq.len() as i64).into(),
+                LispType::List(ref seq) |
+                LispType::Vector(ref seq) => new_number(seq.len() as i64).into(),
                 LispType::Nil => new_number(0).into(),
                 _ => None,
             }
@@ -405,7 +407,8 @@ fn nth(args: Seq) -> EvaluationResult {
     let result = args.split_first().and_then(|(seq, rest)| {
         rest.split_first().and_then(|(idx, _)| {
             match **seq {
-                LispType::List(ref seq) => {
+                LispType::List(ref seq) |
+                LispType::Vector(ref seq) => {
                     match **idx {
                         LispType::Number(n) => {
                             let n = n as usize;
@@ -426,7 +429,8 @@ fn nth(args: Seq) -> EvaluationResult {
 fn first(args: Seq) -> EvaluationResult {
     args.first().and_then(|seq| {
         match **seq {
-            LispType::List(ref seq)  => {
+            LispType::List(ref seq) |
+            LispType::Vector(ref seq) => {
                 if seq.is_empty() {
                     Some(new_nil())
                 } else {
@@ -443,7 +447,8 @@ fn first(args: Seq) -> EvaluationResult {
 fn rest(args: Seq) -> EvaluationResult {
     args.first().and_then(|seq| {
         match **seq {
-            LispType::List(ref seq)  => {
+            LispType::List(ref seq) |
+            LispType::Vector(ref seq) => {
                 let items = if seq.is_empty() {
                     vec![]
                 } else {
@@ -451,7 +456,7 @@ fn rest(args: Seq) -> EvaluationResult {
                 };
                 new_list(items).into()
             },
-            LispType::Nil => Some(new_nil()),
+            LispType::Nil => Some(new_list(vec![])),
             _ => None
         }
     }).ok_or(error_message("call to rest failed"))

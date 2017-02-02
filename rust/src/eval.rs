@@ -173,13 +173,15 @@ fn eval_let(seq: Seq, env: Env) -> EvaluationResult {
     seq.split_first()
         .ok_or(EvaluationError::Message("wrong arity".to_string()))
         .and_then(|(bindings, body)| {
-            if let LispType::List(ref seq) = **bindings {
-                let body = body.to_vec();
-                build_let_env(seq.to_vec(), env)
-                    .ok_or(EvaluationError::Message("could not build let env".to_string()))
-                    .and_then(|env| eval_sequence(body, env))
-            } else {
-                Err(EvaluationError::Message("wrong type!".to_string()))
+            match **bindings {
+                LispType::List(ref seq) |
+                LispType::Vector(ref seq) => {
+                    let body = body.to_vec();
+                    build_let_env(seq.to_vec(), env)
+                        .ok_or(EvaluationError::Message("could not build let env".to_string()))
+                        .and_then(|env| eval_sequence(body, env))
+                }
+                _ => Err(EvaluationError::Message("wrong type!".to_string())),
             }
         })
 }
@@ -211,7 +213,8 @@ fn eval_lambda(seq: Seq, env: Env) -> EvaluationResult {
     }
 
     let params = match *seq[0] {
-        LispType::List(ref params) => params.to_vec(),
+        LispType::List(ref params) |
+        LispType::Vector(ref params) => params.to_vec(),
         _ => unreachable!(),
     };
 

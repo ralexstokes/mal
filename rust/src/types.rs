@@ -137,7 +137,14 @@ impl Assoc {
 impl fmt::Display for Assoc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (i, (k, v)) in self.bindings.iter().enumerate() {
-            try!(write!(f, "{} {}", k, printer::print(v)));
+            // see NOTE about keyword reading
+            // ... have to restore type info here
+            let proper_key = if k.starts_with(":") {
+                new_keyword(k)
+            } else {
+                new_string(k)
+            };
+            try!(write!(f, "{} {}", printer::print(&proper_key), printer::print(v)));
             if i != self.bindings.len() - 1 {
                 try!(write!(f, ", "))
             }
@@ -247,6 +254,8 @@ impl PartialEq for LispType {
             (&Fn(_), &Fn(_)) => false,
             (&List(ref xs), &List(ref ys)) => xs == ys,
             (&Vector(ref xs), &Vector(ref ys)) => xs == ys,
+            (&List(ref xs), &Vector(ref ys)) => xs == ys,
+            (&Vector(ref xs), &List(ref ys)) => xs == ys,
             _ => false,
         }
     }
