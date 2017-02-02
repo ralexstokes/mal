@@ -1,5 +1,5 @@
 use types::{LispValue, LispType, Seq, EvaluationResult, new_symbol, new_list, new_nil, new_lambda,
-            new_vector, Assoc, new_map_from_fn};
+            new_vector, Assoc, new_map_from_fn, new_string};
 use std::result::Result;
 use error::{error_message, EvaluationError};
 use ns;
@@ -466,14 +466,34 @@ fn eval_try(seq: Seq, env: Env) -> EvaluationResult {
     }
 
     let body = &seq[0];
-    let handler = &seq[1];
 
     let result = eval(body.clone(), env.clone());
-    if let Err(EvaluationError::Exception(exn)) = result {
-        eval_catch(handler.clone(), env.clone()) // will map catch form to lambda
-            .and_then(|handler| eval_exception(handler, exn.clone(), env))
-    } else {
-        result
+    // NOTE: currently just catches any error from the prior eval.
+    // Need to handle Rust panics
+
+    let handler = &seq[1];
+    match result {
+        Ok(val) => Ok(val),
+        Err(EvaluationError::WrongArity(_)) => {
+            eval_catch(handler.clone(), env.clone()) // will map catch form to lambda
+                .and_then(|handler| eval_exception(handler, new_string("wrong arity"), env))
+        }
+        Err(EvaluationError::BadArguments(_)) => {
+            eval_catch(handler.clone(), env.clone()) // will map catch form to lambda
+                .and_then(|handler| eval_exception(handler, new_string("bad arguments to fn"), env))
+        }
+        Err(EvaluationError::MissingSymbol(ref sym)) => {
+            eval_catch(handler.clone(), env.clone()) // will map catch form to lambda
+                .and_then(|handler| eval_exception(handler, new_string(&format!("'{}' not found", sym)), env))
+        }
+        Err(EvaluationError::Message(ref msg)) => {
+            eval_catch(handler.clone(), env.clone()) // will map catch form to lambda
+                .and_then(|handler| eval_exception(handler, new_string(msg), env))
+        }
+        Err(EvaluationError::Exception(exn)) => {
+            eval_catch(handler.clone(), env.clone()) // will map catch form to lambda
+                .and_then(|handler| eval_exception(handler, exn, env))
+        }
     }
 }
 
@@ -486,7 +506,7 @@ fn eval_catch(handler: LispValue, env: Env) -> EvaluationResult {
     };
 
     match *seq[0] {
-        LispType::Symbol(ref s) if s == CATCH_FORM => {
+        LispType::Symbol(ref s) if s != CATCH_FORM => {
             return Err(EvaluationError::Message("no catch handler supplied -- missing catch* ?"
                 .to_string()));
         }
@@ -501,7 +521,10 @@ fn eval_catch(handler: LispValue, env: Env) -> EvaluationResult {
 }
 
 fn eval_exception(handler: LispValue, exception: LispValue, env: Env) -> EvaluationResult {
-    let body = vec![handler, exception];
-    let val = new_list(body);
-    eval(val, env)
+    match *handler {
+        LispType::Lambda { ref params, ref body, .. } => {
+            apply_lambda(params.clone(), body.clone(), env, vec![exception])
+        }
+        _ => unreachable!(),
+    }
 }

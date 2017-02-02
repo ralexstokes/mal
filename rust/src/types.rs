@@ -31,7 +31,7 @@ pub enum LispType {
     Atom(RefCell<LispValue>),
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq)]
 pub struct Assoc {
     pub bindings: HashMap<String, LispValue>,
 }
@@ -132,10 +132,12 @@ impl Assoc {
         let vals = self.bindings.values().map(|v| v.clone()).collect::<Vec<_>>();
         Ok(new_list(vals))
     }
-}
 
-impl fmt::Display for Assoc {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    // Hook into print_readably option of printer
+    pub fn print(&self, readably: bool) -> String {
+        use std::fmt::Write;
+
+        let mut result = String::new();
         for (i, (k, v)) in self.bindings.iter().enumerate() {
             // see NOTE about keyword reading
             // ... have to restore type info here
@@ -144,12 +146,22 @@ impl fmt::Display for Assoc {
             } else {
                 new_string(k)
             };
-            try!(write!(f, "{} {}", printer::print(&proper_key), printer::print(v)));
+            write!(&mut result,
+                   "{} {}",
+                   printer::pr_str(&proper_key, readably),
+                   printer::pr_str(v, readably))
+                .expect("could not print map pair");
             if i != self.bindings.len() - 1 {
-                try!(write!(f, ", "))
+                write!(&mut result, " ").expect("could not format map");
             }
         }
-        Ok(())
+        result
+    }
+}
+
+impl fmt::Display for Assoc {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.print(true))
     }
 }
 
@@ -247,15 +259,16 @@ impl PartialEq for LispType {
             (&Nil, &Nil) => true,
             (&Boolean(x), &Boolean(y)) => x == y,
             (&String(ref s), &String(ref t)) => s == t,
-            (&Number(x), &Number(y)) => x == y,
             (&Keyword(ref s), &Keyword(ref t)) => s == t,
+            (&Number(x), &Number(y)) => x == y,
             (&Symbol(ref s), &Symbol(ref t)) => s == t,
             (&Lambda { .. }, &Lambda { .. }) => false,
-            (&Fn(_), &Fn(_)) => false,
+            (&Fn(f), &Fn(g)) => f == g,
             (&List(ref xs), &List(ref ys)) => xs == ys,
             (&Vector(ref xs), &Vector(ref ys)) => xs == ys,
             (&List(ref xs), &Vector(ref ys)) => xs == ys,
             (&Vector(ref xs), &List(ref ys)) => xs == ys,
+            (&Map(ref first), &Map(ref second)) => first == second,
             _ => false,
         }
     }

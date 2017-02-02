@@ -511,7 +511,8 @@ fn flatten_last(args: Seq) -> Result<Seq, EvaluationError> {
     for (i, arg) in args.iter().enumerate() {
         if i == len - 1 {
             match **arg {
-                LispType::List(ref seq) => {
+                LispType::List(ref seq) |
+                LispType::Vector(ref seq) => {
                     for s in seq.iter() {
                         result.push(s.clone());
                     }
@@ -543,7 +544,8 @@ fn map(args: Seq) -> EvaluationResult {
                     ..
                 } => {
                     match **xs {
-                        LispType::List(ref xs) => {
+                        LispType::List(ref xs) |
+                        LispType::Vector(ref xs) => {
                             let mut fxs = vec![];
                             for x in xs.iter() {
                                 let args = vec![x.clone()];
@@ -560,7 +562,8 @@ fn map(args: Seq) -> EvaluationResult {
                 },
                 LispType::Fn(f) => {
                     match **xs {
-                        LispType::List(ref xs) => {
+                        LispType::List(ref xs) |
+                        LispType::Vector(ref xs) => {
                             let mut fxs = vec![];
                             for x in xs.iter() {
                                 let fx = try!(f(vec![x.clone()]));
@@ -767,9 +770,12 @@ fn to_keyword(args: Seq) -> EvaluationResult {
         .ok_or(error_message("wrong arity"))
         .and_then(|k| {
             if let LispType::String(ref s) = **k {
+                // NOTE: see note about keyword handling
+                Ok(new_keyword(&format!(":{}", s)))
+            } else if let LispType::Keyword(ref s) = **k {
                 Ok(new_keyword(s))
             } else {
-                Err(error_message("wrong type to symbol"))
+                Err(error_message("wrong type to keyword"))
             }
         })
 }
@@ -846,8 +852,9 @@ fn assoc(args: Seq) -> EvaluationResult {
         .and_then(|(map, rest)| {
             match **map {
                 LispType::Map(ref map) => {
-                    let mut new = try!(Assoc::from_seq(rest.to_vec()));
-                    try!(new.merge(map));
+                    let mut new = map.clone();
+                    let rest = try!(Assoc::from_seq(rest.to_vec()));
+                    try!(new.merge(&rest));
                     Ok(new_map(new))
                 },
                 _ => Err(error_message("wrong type of arguments to assoc"))
@@ -893,6 +900,9 @@ fn get(args: Seq) -> EvaluationResult {
                         LispType::Map(ref map) => {
                             map.get(key).or(Ok(new_nil()))
                         },
+                        LispType::Nil => {
+                            Ok(new_nil())
+                        }
                         _ => Err(error_message("wrong type of arguments to get"))
                     }
                 })

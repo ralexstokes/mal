@@ -29,7 +29,7 @@ pub fn pr_str(value: &LispValue, readably: bool) -> String {
         LispType::Fn(_) => "#<host-fn>".to_string(),
         LispType::List(ref seq) => format!("({})", pr_seq(seq, readably)),
         LispType::Vector(ref seq) => format!("[{}]", pr_seq(seq, readably)),
-        LispType::Map(ref map) => format!("{{{}}}", map),
+        LispType::Map(ref map) => format!("{{{}}}", map.print(readably)),
         LispType::Atom(ref atom) => {
             let value = atom.borrow();
             format!("(atom {})", *value)
