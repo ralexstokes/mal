@@ -8,6 +8,7 @@ use std::io::Read;
 use std::fs::File;
 use eval::{eval, apply_lambda};
 use readline;
+use time;
 
 pub type Ns = HashMap<String, LispValue>;
 
@@ -114,6 +115,10 @@ pub fn core() -> Ns {
                                                      ("contains?", contains),
                                                      ("keys", keys),
                                                      ("vals", vals),
+                                                     ("time-ms", time_millis),
+                                                     ("conj", conj),
+                                                     ("string?", is_string),
+                                                     ("seq", to_seq)
     ];
     let bindings = mappings.iter()
         .map(|&(k, v)| (k.to_string(), new_fn(v)))
@@ -952,4 +957,100 @@ fn vals(args: Seq) -> EvaluationResult {
                 _ => Err(error_message("wrong type of arguments to vals"))
             }
         })
+}
+
+// time-ms: takes no arguments and returns the number of milliseconds since epoch (00:00:00 UTC January 1, 1970).
+fn time_millis(_: Seq) -> EvaluationResult {
+    let t = time::get_time();
+    let sec = t.sec as i64;
+    let nsec = t.nsec as i64;
+    let millis = sec * 1000;
+    let nsec_millis = nsec / 1_000_000;
+    let total_millis = millis + nsec_millis;
+    Ok(new_number(total_millis))
+}
+
+// conj: takes a collection and one or more elements as arguments and returns a new collection which includes the original collection and the new elements. If the collection is a list, a new list is returned with the elements inserted at the start of the given list in opposite order; if the collection is a vector, a new vector is returned with the elements added to the end of the given vector.
+fn conj(args: Seq) -> EvaluationResult {
+    args.split_first()
+        .ok_or(error_message("wrong arity to conj"))
+        .and_then(|(coll, rest)| {
+            match **coll {
+                LispType::List(ref seq) => {
+                    let mut new_seq = vec![];
+
+                    for elem in rest.iter().rev() {
+                        new_seq.push(elem.clone());
+                    }
+
+                    for elem in seq.iter() {
+                        new_seq.push(elem.clone());
+                    }
+
+                    Ok(new_list(new_seq))
+                },
+                LispType::Vector(ref seq) => {
+                    let mut new_seq = vec![];
+                    for elem in seq.iter() {
+                        new_seq.push(elem.clone());
+                    }
+                    for elem in rest.iter() {
+                        new_seq.push(elem.clone());
+                    }
+                    Ok(new_vector(new_seq))
+                }
+                _ => Err(error_message("wrong type of arguments to conj"))
+            }
+        })
+}
+
+// string?: returns true if the parameter is a string.
+fn is_string(args: Seq) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity to string?"))
+        .and_then(|m| {
+            let is_string = match **m {
+                LispType::String(_) => true,
+                _ => false,
+            };
+            Ok(new_boolean(is_string))
+        })
+}
+
+// seq: takes a list, vector, string, or nil. If an empty list, empty vector, or empty string ("") is passed in then nil is returned. Otherwise, a list is returned unchanged, a vector is converted into a list, and a string is converted to a list that containing the original string split into single character strings.
+fn to_seq(args: Seq) -> EvaluationResult {
+    args.first()
+        .and_then(|a| {
+            match **a {
+                LispType::List(ref seq) => {
+                    if seq.is_empty() {
+                        Some(new_nil())
+                    } else {
+                        Some(new_list(seq.clone()))
+                    }
+                }
+                LispType::Vector(ref seq) =>  {
+                    if seq.is_empty() {
+                        Some(new_nil())
+                    } else {
+                        Some(new_list(seq.clone()))
+                    }
+                }
+                LispType::String(ref s) => {
+                    if s.is_empty() {
+                        Some(new_nil())
+                    } else {
+                        let mut seq = vec![];
+                        for c in s.chars() {
+                            let next = new_string(&c.to_string());
+                            seq.push(next);
+                        }
+                        Some(new_list(seq))
+                    }
+                }
+                LispType::Nil => new_nil().into(),
+                _ => None,
+            }
+        })
+        .ok_or(error_message("could not seq this value"))
 }
