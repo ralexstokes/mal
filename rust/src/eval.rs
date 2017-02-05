@@ -73,7 +73,13 @@ fn eval_list(seq: Seq, env: Env) -> EvaluationResult {
                     eval_macroexpand(operands.to_vec(), env)
                 }
                 LispType::Symbol(ref s) if s == TRY_FORM => eval_try(operands.to_vec(), env),
-                _ => apply(operator.clone(), operands.to_vec(), env),
+                _ => {
+                    eval_seq(operands.to_vec(), env.clone()).and_then(|evops| {
+                        eval(operator.clone(), env).and_then(|evop| {
+                            apply(evop, evops)
+                        })
+                    })
+                }
             }
         })
 }
@@ -87,18 +93,14 @@ fn eval_seq(operands: Seq, env: Env) -> Result<Seq, EvaluationError> {
     Ok(result)
 }
 
-fn apply(operator: LispValue, operands: Seq, env: Env) -> EvaluationResult {
-    eval_seq(operands, env.clone()).and_then(|evops| {
-        eval(operator, env.clone()).and_then(|evop| {
-            match *evop {
-                LispType::Lambda { ref params, ref body, ref env, .. } => {
-                    apply_lambda(params.clone(), body.clone(), env.clone(), evops.to_vec())
-                }
-                LispType::Fn(f) => f(evops.to_vec()),
-                _ => unreachable!(),
-            }
-        })
-    })
+fn apply(operator: LispValue, operands: Seq) -> EvaluationResult {
+        match *operator {
+            LispType::Lambda { ref params, ref body, ref env, .. } => {
+            apply_lambda(params.clone(), body.clone(), env.clone(), operands.to_vec())
+        }
+        LispType::Fn(f) => f(operands.to_vec()),
+        _ => unreachable!(),
+    }
 }
 
 pub fn apply_lambda(params: Seq, body: Seq, env: Env, evops: Seq) -> EvaluationResult {
