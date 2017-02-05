@@ -3,6 +3,7 @@ extern crate regex;
 #[macro_use]
 extern crate lazy_static;
 extern crate term;
+extern crate time;
 
 pub const DEFAULT_PROMPT: &'static str = "user> ";
 

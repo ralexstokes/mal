@@ -8,6 +8,7 @@ rustyline = "1.0.0"
 regex = "0.1.80"
 lazy_static = "0.2.2"
 term = "0.2"
+time = "0.1.36"
 
 [features]
 readline = []
