@@ -415,8 +415,8 @@ fn is_macro_call(val: &LispValue, env: Env) -> bool {
                     match env.borrow().get(s) {
                         Ok(val) => {
                             match *val {
-                                LispType::Lambda { is_macro, .. } => is_macro.into(),
-                                _ => false.into(),
+                                LispType::Lambda { is_macro, .. } => is_macro,
+                                _ => false,
                             }
                         }
                         Err(_) => false,
