@@ -6,15 +6,22 @@ use ns;
 use env::{Env, empty_from, new, root};
 
 pub fn eval(val: LispValue, env: Env) -> EvaluationResult {
-    macroexpand(val, env.clone()).and_then(|val| {
-        match *val {
-            LispType::Symbol(ref s) => eval_symbol(s, env),
-            LispType::List(ref seq) => eval_list(seq.to_vec(), env),
-            LispType::Vector(ref seq) => eval_vector(seq.to_vec(), env),
-            LispType::Map(ref map) => eval_map(map, env),
-            _ => eval_self_evaluating(val.clone()),
+    match *val {
+        LispType::Symbol(ref s) => eval_symbol(s, env),
+        LispType::List(ref seq) => {
+            // TODO want to avoid re boxing this
+            macroexpand(new_list(seq.clone()), env.clone()).and_then(|val| {
+                if let LispType::List(ref seq) = *val {
+                    return eval_list(seq.to_vec(), env);
+                }
+
+                eval(val, env)
+            })
         }
-    })
+        LispType::Vector(ref seq) => eval_vector(seq.to_vec(), env),
+        LispType::Map(ref map) => eval_map(map, env),
+        _ => eval_self_evaluating(val.clone()),
+    }
 }
 
 fn eval_symbol(s: &str, env: Env) -> EvaluationResult {
