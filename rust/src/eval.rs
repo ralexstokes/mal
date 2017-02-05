@@ -157,14 +157,14 @@ fn eval_define(seq: Seq, env: Env) -> EvaluationResult {
         return Err(EvaluationError::Message("wrong arity".to_string()));
     }
 
-    let n = match *seq[0] {
+    let name = match *seq[0] {
         LispType::Symbol(ref s) => s.clone(),
         _ => unreachable!(),
     };
     let val = &seq[1];
 
     eval(val.clone(), env.clone()).and_then(|val| {
-        env.borrow_mut().set(n, val.clone());
+        env.borrow_mut().set(name, val.clone());
         Ok(val)
     })
 }
@@ -385,17 +385,17 @@ fn eval_macro(seq: Seq, env: Env) -> EvaluationResult {
         return Err(error_message("not enough arguments in call to defmacro!"));
     }
 
-    let n = match *seq[0] {
+    let name = match *seq[0] {
         LispType::Symbol(ref s) => s.clone(),
         _ => unreachable!(),
     };
-    let val = &seq[1];
+    let body = &seq[1];
 
-    eval(val.clone(), env.clone()).and_then(|f| {
+    eval(body.clone(), env.clone()).and_then(|f| {
         match *f {
             LispType::Lambda { ref params, ref body, ref env, .. } => {
                 let new_f = new_lambda(params.clone(), body.clone(), env.clone(), true);
-                env.borrow_mut().set(n, new_f.clone());
+                env.borrow_mut().set(name, new_f.clone());
                 Ok(new_f)
             }
             _ => Err(EvaluationError::Message("Could not eval macro".to_string())),
