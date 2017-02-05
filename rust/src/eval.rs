@@ -1,8 +1,8 @@
+use std::result::Result;
+use ns;
 use types::{LispValue, LispType, Seq, EvaluationResult, new_symbol, new_list, new_nil, new_lambda,
             new_vector, Assoc, new_map_from_fn, new_string};
-use std::result::Result;
 use error::{error_message, EvaluationError};
-use ns;
 use env::{Env, empty_from, new, root};
 
 pub fn eval(val: LispValue, env: Env) -> EvaluationResult {
