@@ -444,9 +444,16 @@ fn macroexpand(val: LispValue, env: Env) -> EvaluationResult {
                 // using invariants of is_macro_call to skip some checks here
                 match *seq[0] {
                     LispType::Symbol(ref s) => {
-                        env.borrow()
-                            .get(s)
-                            .and_then(|val| apply(val, seq[1..].to_vec(), env.clone()))
+                        env.borrow().get(s).and_then(|val| {
+                            let ops = seq[1..].to_vec();
+                            match *val {
+                                LispType::Lambda { ref params, ref body, ref env, .. } => {
+                                    apply_lambda(params.clone(), body.clone(), env.clone(), ops)
+                                }
+                                LispType::Fn(f) => f(ops),
+                                _ => unreachable!(),
+                            }
+                        })
                     }
                     _ => Err(EvaluationError::BadArguments(val.clone())),
                 }
