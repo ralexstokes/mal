@@ -1,25 +1,25 @@
 use std::result::Result;
 use ns;
 use types::{LispValue, LispType, Seq, EvaluationResult, new_symbol, new_list, new_nil, new_lambda,
-            new_vector, Assoc, new_map_from_fn, new_string};
+            new_vector, Assoc, new_map_from_fn, new_string, new_macro};
 use error::{error_message, EvaluationError};
 use env::{Env, empty_from, new, root};
 
 pub fn eval(val: LispValue, env: Env) -> EvaluationResult {
     match *val {
-        LispType::Symbol(ref s) => eval_symbol(s, env),
-        LispType::List(ref seq) => {
+        LispType::Symbol(ref s, ..) => eval_symbol(s, env),
+        LispType::List(ref seq, ..) => {
             // TODO want to avoid re boxing this
-            macroexpand(new_list(seq.clone()), env.clone()).and_then(|val| {
-                if let LispType::List(ref seq) = *val {
+            macroexpand(new_list(seq.clone(), None), env.clone()).and_then(|val| {
+                if let LispType::List(ref seq, ..) = *val {
                     return eval_list(seq.to_vec(), env);
                 }
 
                 eval(val, env)
             })
         }
-        LispType::Vector(ref seq) => eval_vector(seq.to_vec(), env),
-        LispType::Map(ref map) => eval_map(map, env),
+        LispType::Vector(ref seq, ..) => eval_vector(seq.to_vec(), env),
+        LispType::Map(ref map, ..) => eval_map(map, env),
         _ => eval_self_evaluating(val.clone()),
     }
 }
@@ -48,31 +48,31 @@ const CATCH_FORM: &'static str = "catch*";
 
 fn eval_list(seq: Seq, env: Env) -> EvaluationResult {
     if seq.is_empty() {
-        return Ok(new_list(seq));
+        return Ok(new_list(seq, None));
     }
 
     seq.split_first()
         .ok_or(EvaluationError::Message("could not split list to eval".to_string()))
         .and_then(|(operator, operands)| {
             match **operator {
-                LispType::Symbol(ref s) if s == IF_FORM => eval_if(operands.to_vec(), env),
-                LispType::Symbol(ref s) if s == SEQUENCE_FORM => {
+                LispType::Symbol(ref s, ..) if s == IF_FORM => eval_if(operands.to_vec(), env),
+                LispType::Symbol(ref s, ..) if s == SEQUENCE_FORM => {
                     eval_sequence(operands.to_vec(), env)
                 }
-                LispType::Symbol(ref s) if s == DEFINE_FORM => eval_define(operands.to_vec(), env),
-                LispType::Symbol(ref s) if s == LET_FORM => eval_let(operands.to_vec(), env),
-                LispType::Symbol(ref s) if s == LAMBDA_FORM => eval_lambda(operands.to_vec(), env),
-                LispType::Symbol(ref s) if s == EVAL_FORM => eval_eval(operands.to_vec(), env),
-                LispType::Symbol(ref s) if s == ENV_FORM => eval_env(env),
-                LispType::Symbol(ref s) if s == QUOTE_FORM => eval_quote(operands.to_vec()),
-                LispType::Symbol(ref s) if s == QUASIQUOTE_FORM => {
+                LispType::Symbol(ref s, ..) if s == DEFINE_FORM => eval_define(operands.to_vec(), env),
+                LispType::Symbol(ref s, ..) if s == LET_FORM => eval_let(operands.to_vec(), env),
+                LispType::Symbol(ref s, ..) if s == LAMBDA_FORM => eval_lambda(operands.to_vec(), env),
+                LispType::Symbol(ref s, ..) if s == EVAL_FORM => eval_eval(operands.to_vec(), env),
+                LispType::Symbol(ref s, ..) if s == ENV_FORM => eval_env(env),
+                LispType::Symbol(ref s, ..) if s == QUOTE_FORM => eval_quote(operands.to_vec()),
+                LispType::Symbol(ref s, ..) if s == QUASIQUOTE_FORM => {
                     eval_quasiquote(operands.to_vec(), env)
                 }
-                LispType::Symbol(ref s) if s == MACRO_FORM => eval_macro(operands.to_vec(), env),
-                LispType::Symbol(ref s) if s == MACROEXPAND_FORM => {
+                LispType::Symbol(ref s, ..) if s == MACRO_FORM => eval_macro(operands.to_vec(), env),
+                LispType::Symbol(ref s, ..) if s == MACROEXPAND_FORM => {
                     eval_macroexpand(operands.to_vec(), env)
                 }
-                LispType::Symbol(ref s) if s == TRY_FORM => eval_try(operands.to_vec(), env),
+                LispType::Symbol(ref s, ..) if s == TRY_FORM => eval_try(operands.to_vec(), env),
                 _ => {
                     eval_seq(operands.to_vec(), env.clone()).and_then(|evops| {
                         eval(operator.clone(), env).and_then(|evop| {
@@ -98,7 +98,7 @@ fn apply(operator: LispValue, operands: Seq) -> EvaluationResult {
             LispType::Lambda { ref params, ref body, ref env, .. } => {
             apply_lambda(params.clone(), body.clone(), env.clone(), operands.to_vec())
         }
-        LispType::Fn(f) => f(operands.to_vec()),
+        LispType::Fn(f, ..) => f(operands.to_vec()),
         _ => unreachable!(),
     }
 }
@@ -123,7 +123,7 @@ fn eval_sequence(seq: Seq, env: Env) -> EvaluationResult {
 }
 
 fn eval_vector(seq: Seq, env: Env) -> EvaluationResult {
-    eval_seq(seq, env).and_then(|seq| Ok(new_vector(seq)))
+    eval_seq(seq, env).and_then(|seq| Ok(new_vector(seq, None)))
 }
 
 fn eval_map(map: &Assoc, env: Env) -> EvaluationResult {
@@ -167,7 +167,7 @@ fn eval_define(seq: Seq, env: Env) -> EvaluationResult {
     }
 
     let name = match *seq[0] {
-        LispType::Symbol(ref s) => s.clone(),
+        LispType::Symbol(ref s, ..) => s.clone(),
         _ => unreachable!(),
     };
     let val = &seq[1];
@@ -183,8 +183,8 @@ fn eval_let(seq: Seq, env: Env) -> EvaluationResult {
         .ok_or(EvaluationError::Message("wrong arity".to_string()))
         .and_then(|(bindings, body)| {
             match **bindings {
-                LispType::List(ref seq) |
-                LispType::Vector(ref seq) => {
+                LispType::List(ref seq, ..) |
+                LispType::Vector(ref seq, ..) => {
                     let body = body.to_vec();
                     build_let_env(seq.to_vec(), env)
                         .ok_or(EvaluationError::Message("could not build let env".to_string()))
@@ -205,7 +205,7 @@ fn build_let_env(bindings: Seq, env: Env) -> Option<Env> {
         }
 
         let key = match *pair[0].clone() {
-            LispType::Symbol(ref s) => s.clone(),
+            LispType::Symbol(ref s, ..) => s.clone(),
             _ => unreachable!(),
         };
 
@@ -222,14 +222,14 @@ fn eval_lambda(seq: Seq, env: Env) -> EvaluationResult {
     }
 
     let params = match *seq[0] {
-        LispType::List(ref params) |
-        LispType::Vector(ref params) => params.to_vec(),
+        LispType::List(ref params, ..) |
+        LispType::Vector(ref params, ..) => params.to_vec(),
         _ => unreachable!(),
     };
 
     let body = seq[1..].to_vec();
 
-    Ok(new_lambda(params, body, env, false))
+    Ok(new_lambda(params, body, env, None))
 }
 
 // guest eval
@@ -270,43 +270,43 @@ fn eval_quasiquote(seq: Seq, env: Env) -> EvaluationResult {
 
 fn eval_quasiquote_for(arg: &LispValue, env: Env) -> EvaluationResult {
     let arg_elems = match **arg {
-        LispType::List(ref seq) if !seq.is_empty() => seq.to_vec(),
-        LispType::Vector(ref seq) if !seq.is_empty() => seq.to_vec(),
+        LispType::List(ref seq, ..) if !seq.is_empty() => seq.to_vec(),
+        LispType::Vector(ref seq, ..) if !seq.is_empty() => seq.to_vec(),
         _ => {
             let mut result: Seq = vec![];
-            result.push(new_symbol("quote"));
+            result.push(new_symbol("quote", None));
             result.push(arg.clone());
-            return Ok(new_list(result));
+            return Ok(new_list(result, None));
         }
     };
 
     let first = &arg_elems[0];
     match **first {
-        LispType::Symbol(ref s) if s == "unquote" => {
+        LispType::Symbol(ref s, ..) if s == "unquote" => {
             if arg_elems.len() >= 2 {
                 Ok(arg_elems[1].clone())
             } else {
                 Err(EvaluationError::WrongArity(arg.clone()))
             }
         }
-        LispType::List(ref seq) if !seq.is_empty() => {
+        LispType::List(ref seq, ..) if !seq.is_empty() => {
             seq.split_first()
                 .and_then(|(first, rest)| {
                     match **first {
-                        LispType::Symbol(ref s) if s == "splice-unquote" => {
+                        LispType::Symbol(ref s, ..) if s == "splice-unquote" => {
                             rest.first()
                                 .and_then(|second| {
                                     let mut result: Seq = vec![];
-                                    result.push(new_symbol("concat"));
+                                    result.push(new_symbol("concat", None));
                                     result.push(second.clone());
 
                                     let rest = arg_elems[1..].to_vec();
-                                    let next = new_list(rest);
+                                    let next = new_list(rest, None);
 
                                     eval_quasiquote_for(&next, env.clone())
                                         .and_then(|vals| {
                                             result.push(vals);
-                                            Ok(new_list(result))
+                                            Ok(new_list(result, None))
                                         })
                                         .ok()
                                 })
@@ -315,13 +315,13 @@ fn eval_quasiquote_for(arg: &LispValue, env: Env) -> EvaluationResult {
                             eval_quasiquote_for(&arg_elems[0], env.clone())
                                 .and_then(|first| {
                                     let rest = arg_elems[1..].to_vec();
-                                    let next = new_list(rest);
+                                    let next = new_list(rest, None);
                                     eval_quasiquote_for(&next, env.clone()).and_then(|second| {
                                         let mut result: Seq = vec![];
-                                        result.push(new_symbol("cons"));
+                                        result.push(new_symbol("cons", None));
                                         result.push(first.clone());
                                         result.push(second.clone());
-                                        Ok(new_list(result))
+                                        Ok(new_list(result, None))
                                     })
                                 })
                                 .ok() // TODO -- do not lose errors
@@ -330,25 +330,25 @@ fn eval_quasiquote_for(arg: &LispValue, env: Env) -> EvaluationResult {
                 })
                 .ok_or(EvaluationError::BadArguments(arg.clone()))
         }
-        LispType::Vector(ref seq) if !seq.is_empty() => {
+        LispType::Vector(ref seq, ..) if !seq.is_empty() => {
             // duplicate of above; TODO refactor
             seq.split_first()
                 .and_then(|(first, rest)| {
                     match **first {
-                        LispType::Symbol(ref s) if s == "splice-unquote" => {
+                        LispType::Symbol(ref s, ..) if s == "splice-unquote" => {
                             rest.first()
                                 .and_then(|second| {
                                     let mut result: Seq = vec![];
-                                    result.push(new_symbol("concat"));
+                                    result.push(new_symbol("concat", None));
                                     result.push(second.clone());
 
                                     let rest = arg_elems[1..].to_vec();
-                                    let next = new_list(rest);
+                                    let next = new_list(rest, None);
 
                                     eval_quasiquote_for(&next, env.clone())
                                         .and_then(|vals| {
                                             result.push(vals);
-                                            Ok(new_list(result))
+                                            Ok(new_list(result, None))
                                         })
                                         .ok()
                                 })
@@ -357,13 +357,13 @@ fn eval_quasiquote_for(arg: &LispValue, env: Env) -> EvaluationResult {
                             eval_quasiquote_for(&arg_elems[0], env.clone())
                                 .and_then(|first| {
                                     let rest = arg_elems[1..].to_vec();
-                                    let next = new_list(rest);
+                                    let next = new_list(rest, None);
                                     eval_quasiquote_for(&next, env.clone()).and_then(|second| {
                                         let mut result: Seq = vec![];
-                                        result.push(new_symbol("cons"));
+                                        result.push(new_symbol("cons", None));
                                         result.push(first.clone());
                                         result.push(second.clone());
-                                        Ok(new_vector(result))
+                                        Ok(new_vector(result, None))
                                     })
                                 })
                                 .ok() // TODO -- do not lose errors
@@ -375,13 +375,13 @@ fn eval_quasiquote_for(arg: &LispValue, env: Env) -> EvaluationResult {
         _ => {
             eval_quasiquote_for(&arg_elems[0], env.clone()).and_then(|first| {
                 let rest = arg_elems[1..].to_vec();
-                let next = new_list(rest);
+                let next = new_list(rest, None);
                 eval_quasiquote_for(&next, env.clone()).and_then(|second| {
                     let mut result: Seq = vec![];
-                    result.push(new_symbol("cons"));
+                    result.push(new_symbol("cons", None));
                     result.push(first.clone());
                     result.push(second.clone());
-                    Ok(new_list(result))
+                    Ok(new_list(result, None))
                 })
             })
         }
@@ -395,7 +395,7 @@ fn eval_macro(seq: Seq, env: Env) -> EvaluationResult {
     }
 
     let name = match *seq[0] {
-        LispType::Symbol(ref s) => s.clone(),
+        LispType::Symbol(ref s, ..) => s.clone(),
         _ => unreachable!(),
     };
     let body = &seq[1];
@@ -403,7 +403,7 @@ fn eval_macro(seq: Seq, env: Env) -> EvaluationResult {
     eval(body.clone(), env.clone()).and_then(|f| {
         match *f {
             LispType::Lambda { ref params, ref body, ref env, .. } => {
-                let new_f = new_lambda(params.clone(), body.clone(), env.clone(), true);
+                let new_f = new_macro(params.clone(), body.clone(), env.clone(), None);
                 env.borrow_mut().set(name, new_f.clone());
                 Ok(new_f)
             }
@@ -414,17 +414,17 @@ fn eval_macro(seq: Seq, env: Env) -> EvaluationResult {
 
 fn is_macro_call(val: &LispValue, env: Env) -> bool {
     match **val {
-        LispType::List(ref seq) => {
+        LispType::List(ref seq, ..) => {
             if seq.is_empty() {
                 return false;
             }
 
             match *seq[0] {
-                LispType::Symbol(ref s) => {
+                LispType::Symbol(ref s, ..) => {
                     match env.borrow().get(s) {
                         Ok(val) => {
                             match *val {
-                                LispType::Lambda { is_macro, .. } => is_macro,
+                                LispType::Macro { .. } => true,
                                 _ => false,
                             }
                         }
@@ -442,17 +442,17 @@ fn macroexpand(val: LispValue, env: Env) -> EvaluationResult {
     let mut result = val.clone();
     while is_macro_call(&result, env.clone()) {
         let expansion = match *result {
-            LispType::List(ref seq) => {
+            LispType::List(ref seq, ..) => {
                 // using invariants of is_macro_call to skip some checks here
                 match *seq[0] {
-                    LispType::Symbol(ref s) => {
+                    LispType::Symbol(ref s, ..) => {
                         env.borrow().get(s).and_then(|val| {
                             let ops = seq[1..].to_vec();
                             match *val {
-                                LispType::Lambda { ref params, ref body, ref env, .. } => {
+                                LispType::Macro { ref params, ref body, ref env, .. } => {
                                     apply_lambda(params.clone(), body.clone(), env.clone(), ops)
                                 }
-                                LispType::Fn(f) => f(ops),
+                                LispType::Fn(f, ..) => f(ops),
                                 _ => unreachable!(),
                             }
                         })
@@ -517,12 +517,12 @@ fn eval_try(seq: Seq, env: Env) -> EvaluationResult {
 // could add CATCH_FORM to eval block above, although this shortcuts that more general process
 fn eval_catch(handler: LispValue, env: Env) -> EvaluationResult {
     let seq = match *handler {
-        LispType::List(ref seq) if seq.len() >= 3 => seq.to_vec(),
+        LispType::List(ref seq, ..) if seq.len() >= 3 => seq.to_vec(),
         _ => return Err(EvaluationError::Message("wrong arity to catch handler".to_string())),
     };
 
     match *seq[0] {
-        LispType::Symbol(ref s) if s != CATCH_FORM => {
+        LispType::Symbol(ref s, ..) if s != CATCH_FORM => {
             return Err(EvaluationError::Message("no catch handler supplied -- missing catch* ?"
                 .to_string()));
         }
@@ -533,7 +533,7 @@ fn eval_catch(handler: LispValue, env: Env) -> EvaluationResult {
 
     let body = vec![seq[2].clone()];
 
-    Ok(new_lambda(params, body, env, false))
+    Ok(new_lambda(params, body, env, None))
 }
 
 fn eval_exception(handler: LispValue, exception: LispValue, env: Env) -> EvaluationResult {

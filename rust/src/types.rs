@@ -10,6 +10,16 @@ use error::EvaluationError;
 
 pub type LispValue = Rc<LispType>;
 
+pub type Metadata = LispValue; // over LispType::Map
+
+pub type Seq = Vec<LispValue>;
+
+pub type EvaluationResult = Result<LispValue, EvaluationError>;
+
+pub type HostFn = fn(Seq) -> EvaluationResult;
+
+pub type AtomRef = RefCell<LispValue>;
+
 #[derive(Debug,Clone)]
 pub enum LispType {
     Nil,
@@ -17,18 +27,24 @@ pub enum LispType {
     String(String),
     Keyword(String),
     Number(i64),
-    Symbol(String),
+    Symbol(String, Metadata),
     Lambda {
-        params: Vec<LispValue>,
-        body: Vec<LispValue>,
+        params: Seq,
+        body: Seq,
         env: Env,
-        is_macro: bool,
+        metadata: Metadata,
     },
-    Fn(HostFn),
-    List(Vec<LispValue>),
-    Vector(Vec<LispValue>),
-    Map(Assoc),
-    Atom(RefCell<LispValue>),
+    Macro {
+        params: Seq,
+        body: Seq,
+        env: Env,
+        metadata: Metadata,
+    },
+    Fn(HostFn, Metadata),
+    List(Seq, Metadata),
+    Vector(Seq, Metadata),
+    Map(Assoc, Metadata),
+    Atom(AtomRef),
 }
 
 #[derive(Debug,Clone,PartialEq)]
@@ -125,12 +141,12 @@ impl Assoc {
             };
             result.push(next);
         }
-        Ok(new_list(result))
+        Ok(new_list(result, None))
     }
 
     pub fn vals(&self) -> EvaluationResult {
         let vals = self.bindings.values().map(|v| v.clone()).collect::<Vec<_>>();
-        Ok(new_list(vals))
+        Ok(new_list(vals, None))
     }
 
     // Hook into print_readably option of printer
@@ -165,12 +181,6 @@ impl fmt::Display for Assoc {
     }
 }
 
-pub type Seq = Vec<LispValue>;
-
-pub type EvaluationResult = Result<LispValue, EvaluationError>;
-
-pub type HostFn = fn(Seq) -> EvaluationResult;
-
 fn value_of(t: LispType) -> LispValue {
     Rc::new(t)
 }
@@ -191,29 +201,44 @@ pub fn new_number(n: i64) -> LispValue {
     value_of(LispType::Number(n))
 }
 
-pub fn new_symbol(s: &str) -> LispValue {
-    value_of(LispType::Symbol(s.to_string()))
+pub fn new_symbol(s: &str, meta: Option<LispValue>) -> LispValue {
+    let meta = meta.unwrap_or_else(|| new_nil());
+    value_of(LispType::Symbol(s.to_string(), meta))
 }
 
-pub fn new_lambda(params: Seq, body: Seq, env: Env, is_macro: bool) -> LispValue {
+pub fn new_lambda(params: Seq, body: Seq, env: Env, meta: Option<LispValue>) -> LispValue {
+    let meta = meta.unwrap_or_else(|| new_nil());
     value_of(LispType::Lambda {
         params: params,
         body: body,
         env: env,
-        is_macro: is_macro,
+        metadata: meta,
     })
 }
 
-pub fn new_fn(f: HostFn) -> LispValue {
-    value_of(LispType::Fn(f))
+pub fn new_macro(params: Seq, body: Seq, env: Env, meta: Option<LispValue>) -> LispValue {
+    let meta = meta.unwrap_or_else(|| new_nil());
+    value_of(LispType::Macro {
+        params: params,
+        body: body,
+        env: env,
+        metadata: meta,
+    })
 }
 
-pub fn new_list(s: Seq) -> LispValue {
-    value_of(LispType::List(s))
+pub fn new_fn(f: HostFn, meta: Option<LispValue>) -> LispValue {
+    let meta = meta.unwrap_or_else(|| new_nil());
+    value_of(LispType::Fn(f, meta))
 }
 
-pub fn new_vector(s: Seq) -> LispValue {
-    value_of(LispType::Vector(s))
+pub fn new_list(s: Seq, meta: Option<LispValue>) -> LispValue {
+    let meta = meta.unwrap_or_else(|| new_nil());
+    value_of(LispType::List(s, meta))
+}
+
+pub fn new_vector(s: Seq, meta: Option<LispValue>) -> LispValue {
+    let meta = meta.unwrap_or_else(|| new_nil());
+    value_of(LispType::Vector(s, meta))
 }
 
 pub fn new_atom(atom: LispValue) -> LispValue {
@@ -224,12 +249,13 @@ pub fn new_keyword(s: &str) -> LispValue {
     value_of(LispType::Keyword(s.to_string()))
 }
 
-pub fn new_map(m: Assoc) -> LispValue {
-    value_of(LispType::Map(m))
+pub fn new_map(m: Assoc, meta: Option<LispValue>) -> LispValue {
+    let meta = meta.unwrap_or_else(|| new_nil());
+    value_of(LispType::Map(m, meta))
 }
 
 pub fn new_map_from_seq(s: Seq) -> EvaluationResult {
-    Assoc::from_seq(s).and_then(|assoc| Ok(new_map(assoc)))
+    Assoc::from_seq(s).and_then(|assoc| Ok(new_map(assoc, None)))
 }
 
 pub fn new_map_from_fn<F>(m: &Assoc, f: F) -> EvaluationResult
@@ -242,7 +268,11 @@ pub fn new_map_from_fn<F>(m: &Assoc, f: F) -> EvaluationResult
         new.bindings.insert(k, v);
     }
 
-    Ok(new_map(new))
+    Ok(new_map(new, None))
+}
+
+pub fn new_metadata(m: Assoc) -> LispValue {
+    new_map(m, None)
 }
 
 impl fmt::Display for LispType {
@@ -261,14 +291,22 @@ impl PartialEq for LispType {
             (&String(ref s), &String(ref t)) => s == t,
             (&Keyword(ref s), &Keyword(ref t)) => s == t,
             (&Number(x), &Number(y)) => x == y,
-            (&Symbol(ref s), &Symbol(ref t)) => s == t,
+            (&Symbol(ref s, ref metas), &Symbol(ref t, ref metat)) => s == t && metas == metat,
             (&Lambda { .. }, &Lambda { .. }) => false,
-            (&Fn(f), &Fn(g)) => f == g,
-            (&List(ref xs), &List(ref ys)) => xs == ys,
-            (&Vector(ref xs), &Vector(ref ys)) => xs == ys,
-            (&List(ref xs), &Vector(ref ys)) => xs == ys,
-            (&Vector(ref xs), &List(ref ys)) => xs == ys,
-            (&Map(ref first), &Map(ref second)) => first == second,
+            (&Fn(f, ref metaf), &Fn(g, ref metag)) => f == g && metaf == metag,
+            (&List(ref xs, ref metaxs), &List(ref ys, ref metays)) => xs == ys && metaxs == metays,
+            (&Vector(ref xs, ref metaxs), &Vector(ref ys, ref metays)) => {
+                xs == ys && metaxs == metays
+            }
+            (&List(ref xs, ref metaxs), &Vector(ref ys, ref metays)) => {
+                xs == ys && metaxs == metays
+            }
+            (&Vector(ref xs, ref metaxs), &List(ref ys, ref metays)) => {
+                xs == ys && metaxs == metays
+            }
+            (&Map(ref first, ref metafirst), &Map(ref second, ref metasecond)) => {
+                first == second && metafirst == metasecond
+            }
             _ => false,
         }
     }

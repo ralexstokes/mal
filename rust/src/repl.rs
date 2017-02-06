@@ -44,7 +44,7 @@ impl Repl {
                     let ast_args = env_args.iter()
                         .map(|arg| new_string(arg))
                         .collect::<Vec<_>>();
-                    let list_args = new_list(ast_args.to_vec());
+                    let list_args = new_list(ast_args.to_vec(), None);
                     env.borrow_mut().set(ARGV_SYMBOL.to_string(), list_args);
                     self.rep_from_file(file_name, env.clone()).into()
                 });

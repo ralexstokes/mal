@@ -129,11 +129,11 @@ fn test_read_form() {
 
 macro_rules! macroexpand {
     ( $literal:expr, $reader:expr, $result:expr ) => {{
-        let mut seq = vec![new_symbol($literal)];
+        let mut seq = vec![new_symbol($literal, None)];
         let _ = $reader.next();
         if let Ok(next) = read_form($reader) {
             seq.push(next);
-            $result = Ok(new_list(seq));
+            $result = Ok(new_list(seq, None));
         }
     }};
 }
@@ -153,9 +153,16 @@ fn read_form(reader: &mut Reader) -> ReaderResult {
                     "~" => macroexpand!("unquote", reader, result),
                     "~@" => macroexpand!("splice-unquote", reader, result),
                     "@" => macroexpand!("deref", reader, result),
+                    "^" => {
+                        let _ = reader.next();
+                        result = read_form(reader).and_then(|meta| {
+                            read_form(reader).and_then(|data| {
+                                Ok(new_list(vec![new_symbol("with-meta", None), data, meta], None))
+                            })
+                        });
+                    }
                     "" => {
                         result = Err(ReaderError::EmptyInput);
-                        break;
                     }
                     _ => {
                         result = read_atom(reader);
@@ -226,11 +233,11 @@ fn read_seq(reader: &mut Reader) -> Result<Seq, ReaderError> {
 }
 
 fn read_list(reader: &mut Reader) -> ReaderResult {
-    read_seq(reader).and_then(|seq| Ok(new_list(seq)))
+    read_seq(reader).and_then(|seq| Ok(new_list(seq, None)))
 }
 
 fn read_vector(reader: &mut Reader) -> ReaderResult {
-    read_seq(reader).and_then(|seq| Ok(new_vector(seq)))
+    read_seq(reader).and_then(|seq| Ok(new_vector(seq, None)))
 }
 
 fn read_map(reader: &mut Reader) -> ReaderResult {
@@ -326,5 +333,5 @@ fn read_str(s: &str) -> String {
 
 // symbol_from will accept any token so it needs to be called as a catch-all
 fn symbol_from(token: &str) -> ReaderResult {
-    Ok(new_symbol(token))
+    Ok(new_symbol(token, None))
 }

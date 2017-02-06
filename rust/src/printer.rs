@@ -18,18 +18,13 @@ pub fn pr_str(value: &LispValue, readably: bool) -> String {
         }
         LispType::Keyword(ref s) => unread_keyword(s),
         LispType::Number(n) => n.to_string(),
-        LispType::Symbol(ref s) => s.clone(),
-        LispType::Lambda { is_macro, .. } => {
-            if is_macro {
-                "#<macro>".to_string()
-            } else {
-                "#<fn>".to_string()
-            }
-        }
-        LispType::Fn(_) => "#<host-fn>".to_string(),
-        LispType::List(ref seq) => format!("({})", pr_seq(seq, readably)),
-        LispType::Vector(ref seq) => format!("[{}]", pr_seq(seq, readably)),
-        LispType::Map(ref map) => format!("{{{}}}", map.print(readably)),
+        LispType::Symbol(ref s, ..) => s.clone(),
+        LispType::Lambda { .. } => "#<fn>".to_string(),
+        LispType::Macro{..} => "#<macro>".to_string(),
+        LispType::Fn(..) => "#<host-fn>".to_string(),
+        LispType::List(ref seq, ..) => format!("({})", pr_seq(seq, readably)),
+        LispType::Vector(ref seq, ..) => format!("[{}]", pr_seq(seq, readably)),
+        LispType::Map(ref map, ..) => format!("{{{}}}", map.print(readably)),
         LispType::Atom(ref atom) => {
             let value = atom.borrow();
             format!("(atom {})", *value)
@@ -74,7 +69,7 @@ mod tests {
     #[test]
     fn test_print_symbol() {
         let input = "foobar";
-        let ast = new_symbol(&input);
+        let ast = new_symbol(&input, None);
         let output = print(&ast);
         if output.as_str() != input {
             panic!("not equal")
@@ -92,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_print_list() {
-        let ast = new_list(vec![new_symbol("+"), new_number(2), new_number(3)]);
+        let ast = new_list(vec![new_symbol("+", None), new_number(2), new_number(3)]);
         let output = print(&ast);
         if output.as_str() != "(+ 2 3)" {
             panic!("not equal")

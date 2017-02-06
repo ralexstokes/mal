@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::result::Result;
-use types::{LispValue, LispType, HostFn, EvaluationResult, Seq, new_list, new_fn, new_number, new_nil, new_string, new_atom, new_boolean, new_symbol, new_keyword, new_vector, new_map, new_map_from_seq, Assoc};
+use types::{LispValue, LispType, HostFn, EvaluationResult, Seq, new_list, new_fn, new_number, new_nil, new_string, new_atom, new_boolean, new_symbol, new_lambda, new_macro, new_keyword, new_vector, new_map, new_map_from_seq, Assoc};
 use error::{error_message, ReaderError, EvaluationError};
 use printer;
 use reader;
@@ -26,7 +26,7 @@ pub fn new_from(params: Seq, exprs: Seq) -> Ns {
     let params = params.iter()
         .map(|p| {
             match **p {
-                LispType::Symbol(ref s) => s.clone(),
+                LispType::Symbol(ref s, ..) => s.clone(),
                 _ => unreachable!(),
             }
         })
@@ -48,7 +48,7 @@ pub fn new_from(params: Seq, exprs: Seq) -> Ns {
             let var_exprs = exprs.into_iter()
                 .skip(bound_exprs.len())
                 .collect::<Vec<_>>();
-            (var_param.clone(), new_list(var_exprs)).into()
+            (var_param.clone(), new_list(var_exprs, None)).into()
         });
 
     if let Some((param, expr)) = var_binding {
@@ -118,10 +118,12 @@ pub fn core() -> Ns {
                                                      ("time-ms", time_millis),
                                                      ("conj", conj),
                                                      ("string?", is_string),
-                                                     ("seq", to_seq)
+                                                     ("seq", to_seq),
+                                                     ("meta", meta_of),
+                                                     ("with-meta", with_meta)
     ];
     let bindings = mappings.iter()
-        .map(|&(k, v)| (k.to_string(), new_fn(v)))
+        .map(|&(k, v)| (k.to_string(), new_fn(v, None)))
         .collect();
     new(bindings)
 }
@@ -222,14 +224,14 @@ fn println(args: Seq) -> EvaluationResult {
 }
 
 fn to_list(args: Seq) -> EvaluationResult {
-    Ok(new_list((args)))
+    Ok(new_list(args, None))
 }
 
 fn is_list(args: Seq) -> EvaluationResult {
     args.first()
         .and_then(|a| {
             let is = match **a {
-                LispType::List(_) => true,
+                LispType::List(..) => true,
                 _ => false,
             };
             new_boolean(is).into()
@@ -241,8 +243,8 @@ fn is_empty(args: Seq) -> EvaluationResult {
     args.first()
         .and_then(|a| {
             match **a {
-                LispType::List(ref seq) |
-                LispType::Vector(ref seq)=> new_boolean(seq.is_empty()).into(),
+                LispType::List(ref seq, ..) |
+                LispType::Vector(ref seq, ..)=> new_boolean(seq.is_empty()).into(),
                 _ => None,
             }
         })
@@ -253,8 +255,8 @@ fn count_of(args: Seq) -> EvaluationResult {
     args.first()
         .and_then(|a| {
             match **a {
-                LispType::List(ref seq) |
-                LispType::Vector(ref seq) => new_number(seq.len() as i64).into(),
+                LispType::List(ref seq, ..) |
+                LispType::Vector(ref seq, ..) => new_number(seq.len() as i64).into(),
                 LispType::Nil => new_number(0).into(),
                 _ => None,
             }
@@ -363,19 +365,13 @@ fn cons(args: Seq) -> EvaluationResult {
                 .and_then(|(list, _)| {
                     let mut elems = vec![elem.clone()];
                     match **list {
-                        LispType::List(ref seq) => {
+                        LispType::List(ref seq, ..) |
+                        LispType::Vector(ref seq, ..)=> {
                             for s in seq {
                                 elems.push(s.clone())
                             }
 
-                            new_list(elems).into()
-                        },
-                        LispType::Vector(ref seq) => {
-                            for s in seq {
-                                elems.push(s.clone())
-                            }
-
-                            new_list(elems).into()
+                            new_list(elems, None).into()
                         },
                         _ => None
                     }
@@ -390,12 +386,8 @@ fn concat(args: Seq) -> EvaluationResult {
 
     for arg in args {
         match *arg {
-            LispType::List(ref seq) => {
-                for s in seq {
-                    result.push(s.clone());
-                }
-            },
-            LispType::Vector(ref seq) => {
+            LispType::List(ref seq, ..) |
+            LispType::Vector(ref seq, ..) => {
                 for s in seq {
                     result.push(s.clone());
                 }
@@ -404,7 +396,7 @@ fn concat(args: Seq) -> EvaluationResult {
         }
     }
 
-    Ok(new_list((result)))
+    Ok(new_list(result, None))
 }
 
 // nth: this function takes a list (or vector) and a number (index) as arguments, returns the element of the list at the given index. If the index is out of range, this function raises an exception.
@@ -412,8 +404,8 @@ fn nth(args: Seq) -> EvaluationResult {
     let result = args.split_first().and_then(|(seq, rest)| {
         rest.split_first().and_then(|(idx, _)| {
             match **seq {
-                LispType::List(ref seq) |
-                LispType::Vector(ref seq) => {
+                LispType::List(ref seq, ..) |
+                LispType::Vector(ref seq, ..) => {
                     match **idx {
                         LispType::Number(n) => {
                             let n = n as usize;
@@ -434,8 +426,8 @@ fn nth(args: Seq) -> EvaluationResult {
 fn first(args: Seq) -> EvaluationResult {
     args.first().and_then(|seq| {
         match **seq {
-            LispType::List(ref seq) |
-            LispType::Vector(ref seq) => {
+            LispType::List(ref seq, ..) |
+            LispType::Vector(ref seq, ..) => {
                 if seq.is_empty() {
                     Some(new_nil())
                 } else {
@@ -452,16 +444,16 @@ fn first(args: Seq) -> EvaluationResult {
 fn rest(args: Seq) -> EvaluationResult {
     args.first().and_then(|seq| {
         match **seq {
-            LispType::List(ref seq) |
-            LispType::Vector(ref seq) => {
+            LispType::List(ref seq, ..) |
+            LispType::Vector(ref seq, ..) => {
                 let items = if seq.is_empty() {
                     vec![]
                 } else {
                     seq[1..].to_vec()
                 };
-                new_list(items).into()
+                new_list(items, None).into()
             },
-            LispType::Nil => Some(new_list(vec![])),
+            LispType::Nil => Some(new_list(vec![], None)),
             _ => None
         }
     }).ok_or(error_message("call to rest failed"))
@@ -496,10 +488,10 @@ fn apply(args: Seq) -> EvaluationResult {
                 .and_then(|mut args| {
                     let mut app = vec![f.clone()];
                     app.append(&mut args);
-                    eval(new_list(app), env.clone())
+                    eval(new_list(app, None), env.clone())
                 })
         },
-        LispType::Fn(f) => {
+        LispType::Fn(f, ..) => {
             flatten_last(args[1..].to_vec())
                 .and_then(|args| {
                     f(args)
@@ -516,8 +508,8 @@ fn flatten_last(args: Seq) -> Result<Seq, EvaluationError> {
     for (i, arg) in args.iter().enumerate() {
         if i == len - 1 {
             match **arg {
-                LispType::List(ref seq) |
-                LispType::Vector(ref seq) => {
+                LispType::List(ref seq, ..) |
+                LispType::Vector(ref seq, ..) => {
                     for s in seq.iter() {
                         result.push(s.clone());
                     }
@@ -549,8 +541,8 @@ fn map(args: Seq) -> EvaluationResult {
                     ..
                 } => {
                     match **xs {
-                        LispType::List(ref xs) |
-                        LispType::Vector(ref xs) => {
+                        LispType::List(ref xs, ..) |
+                        LispType::Vector(ref xs, ..) => {
                             let mut fxs = vec![];
                             for x in xs.iter() {
                                 let args = vec![x.clone()];
@@ -560,21 +552,21 @@ fn map(args: Seq) -> EvaluationResult {
                                                            args));
                                 fxs.push(fx);
                             }
-                            Ok(new_list((fxs)))
+                            Ok(new_list(fxs, None))
                         },
                         _ => Err(error_message("expected second argument to map to be a list or vector"))
                     }
                 },
-                LispType::Fn(f) => {
+                LispType::Fn(f, ..) => {
                     match **xs {
-                        LispType::List(ref xs) |
-                        LispType::Vector(ref xs) => {
+                        LispType::List(ref xs, ..) |
+                        LispType::Vector(ref xs, ..) => {
                             let mut fxs = vec![];
                             for x in xs.iter() {
                                 let fx = try!(f(vec![x.clone()]));
                                 fxs.push(fx);
                             }
-                            Ok(new_list((fxs)))
+                            Ok(new_list(fxs, None))
                         },
                         _ => Err(error_message("expected second argument to map to be a list or vector"))
                     }
@@ -627,7 +619,7 @@ fn is_symbol(args: Seq) -> EvaluationResult {
         .ok_or(error_message("wrong arity"))
         .and_then(|arg| {
             match **arg {
-                LispType::Symbol(_) => Ok(new_boolean(true)),
+                LispType::Symbol(..) => Ok(new_boolean(true)),
                 _ => Ok(new_boolean(false)),
             }
         })
@@ -738,7 +730,7 @@ fn swap(args: Seq) -> EvaluationResult {
                                         Ok(newval)
                                     })
                                 },
-                                LispType::Fn(f) => {
+                                LispType::Fn(f, ..) => {
                                     let mut value = atom.borrow_mut();
                                     let mut full_params = vec![value.clone()];
                                     full_params.append(&mut args.to_vec());
@@ -762,7 +754,7 @@ fn to_symbol(args: Seq) -> EvaluationResult {
         .ok_or(error_message("wrong arity"))
         .and_then(|s| {
             if let LispType::String(ref s) = **s {
-                Ok(new_symbol(s))
+                Ok(new_symbol(s, None))
             } else {
                 Err(error_message("wrong type to symbol"))
             }
@@ -801,7 +793,7 @@ fn is_keyword(args: Seq) -> EvaluationResult {
 
 // vector: takes a variable number of arguments and returns a vector containing those arguments.
 fn to_vector(args: Seq) -> EvaluationResult {
-    Ok(new_vector((args)))
+    Ok(new_vector(args, None))
 }
 
 // vector?: takes a single argument and returns true (mal true value) if the argument is a vector, otherwise returns false (mal false value).
@@ -809,7 +801,7 @@ fn is_vector(args: Seq) -> EvaluationResult {
     args.first()
         .ok_or(error_message("wrong arity"))
         .and_then(|v| {
-            let is_vector = if let LispType::Vector(_) = **v {
+            let is_vector = if let LispType::Vector(..) = **v {
                 true
             } else {
                 false
@@ -824,8 +816,8 @@ fn is_seq(args: Seq) -> EvaluationResult {
         .ok_or(error_message("wrong arity"))
         .and_then(|s| {
             let is_seq = match **s {
-                LispType::List(_) => true,
-                LispType::Vector(_) => true,
+                LispType::List(..) => true,
+                LispType::Vector(..) => true,
                 _ => false,
             };
             Ok(new_boolean(is_seq))
@@ -843,7 +835,7 @@ fn is_map(args: Seq) -> EvaluationResult {
         .ok_or(error_message("wrong arity"))
         .and_then(|m| {
             let is_assoc = match **m {
-                LispType::Map(_) => true,
+                LispType::Map(..) => true,
                 _ => false,
             };
             Ok(new_boolean(is_assoc))
@@ -856,11 +848,11 @@ fn assoc(args: Seq) -> EvaluationResult {
         .ok_or(error_message("wrong arity to assoc"))
         .and_then(|(map, rest)| {
             match **map {
-                LispType::Map(ref map) => {
+                LispType::Map(ref map, ..) => {
                     let mut new = map.clone();
                     let rest = try!(Assoc::from_seq(rest.to_vec()));
                     try!(new.merge(&rest));
-                    Ok(new_map(new))
+                    Ok(new_map(new, None))
                 },
                 _ => Err(error_message("wrong type of arguments to assoc"))
             }
@@ -873,7 +865,7 @@ fn dissoc(args: Seq) -> EvaluationResult {
         .ok_or(error_message("wrong arity to dissoc"))
         .and_then(|(map, keys)| {
             match **map {
-                LispType::Map(ref map) => {
+                LispType::Map(ref map, ..) => {
                     let mut new = map.clone();
 
                     for key in keys.iter() {
@@ -886,7 +878,7 @@ fn dissoc(args: Seq) -> EvaluationResult {
                         }
                     }
 
-                    Ok(new_map(new))
+                    Ok(new_map(new, None))
                 },
                 _ => Err(error_message("wrong type of arguments to dissoc"))
             }
@@ -902,7 +894,7 @@ fn get(args: Seq) -> EvaluationResult {
                 .ok_or(error_message("wrong arity to get"))
                 .and_then(|(key, _)| {
                     match **map {
-                        LispType::Map(ref map) => {
+                        LispType::Map(ref map, ..) => {
                             map.get(key).or(Ok(new_nil()))
                         },
                         LispType::Nil => {
@@ -923,7 +915,7 @@ fn contains(args: Seq) -> EvaluationResult {
                 .ok_or(error_message("wrong arity to contains?"))
                 .and_then(|(key, _)| {
                     match **map {
-                        LispType::Map(ref map) => {
+                        LispType::Map(ref map, ..) => {
                             map.contains(key)
                         },
                         _ => Err(error_message("wrong type of arguments to contains?"))
@@ -938,7 +930,7 @@ fn keys(args: Seq) -> EvaluationResult {
         .ok_or(error_message("wrong arity to keys"))
         .and_then(|(map, _)| {
             match **map {
-                LispType::Map(ref map) => {
+                LispType::Map(ref map, ..) => {
                     map.keys()
                 },
                 _ => Err(error_message("wrong type of arguments to keys"))
@@ -951,7 +943,7 @@ fn vals(args: Seq) -> EvaluationResult {
         .ok_or(error_message("wrong arity to vals"))
         .and_then(|(map, _)| {
             match **map {
-                LispType::Map(ref map) => {
+                LispType::Map(ref map, ..) => {
                     map.vals()
                 },
                 _ => Err(error_message("wrong type of arguments to vals"))
@@ -976,7 +968,7 @@ fn conj(args: Seq) -> EvaluationResult {
         .ok_or(error_message("wrong arity to conj"))
         .and_then(|(coll, rest)| {
             match **coll {
-                LispType::List(ref seq) => {
+                LispType::List(ref seq, ..) => {
                     let mut new_seq = vec![];
 
                     for elem in rest.iter().rev() {
@@ -987,9 +979,9 @@ fn conj(args: Seq) -> EvaluationResult {
                         new_seq.push(elem.clone());
                     }
 
-                    Ok(new_list(new_seq))
+                    Ok(new_list(new_seq, None))
                 },
-                LispType::Vector(ref seq) => {
+                LispType::Vector(ref seq, ..) => {
                     let mut new_seq = vec![];
                     for elem in seq.iter() {
                         new_seq.push(elem.clone());
@@ -997,7 +989,7 @@ fn conj(args: Seq) -> EvaluationResult {
                     for elem in rest.iter() {
                         new_seq.push(elem.clone());
                     }
-                    Ok(new_vector(new_seq))
+                    Ok(new_vector(new_seq, None))
                 }
                 _ => Err(error_message("wrong type of arguments to conj"))
             }
@@ -1022,18 +1014,12 @@ fn to_seq(args: Seq) -> EvaluationResult {
     args.first()
         .and_then(|a| {
             match **a {
-                LispType::List(ref seq) => {
+                LispType::List(ref seq, ..) |
+                LispType::Vector(ref seq, ..) => {
                     if seq.is_empty() {
                         Some(new_nil())
                     } else {
-                        Some(new_list(seq.clone()))
-                    }
-                }
-                LispType::Vector(ref seq) =>  {
-                    if seq.is_empty() {
-                        Some(new_nil())
-                    } else {
-                        Some(new_list(seq.clone()))
+                        Some(new_list(seq.clone(), None))
                     }
                 }
                 LispType::String(ref s) => {
@@ -1045,7 +1031,7 @@ fn to_seq(args: Seq) -> EvaluationResult {
                             let next = new_string(&c.to_string());
                             seq.push(next);
                         }
-                        Some(new_list(seq))
+                        Some(new_list(seq, None))
                     }
                 }
                 LispType::Nil => new_nil().into(),
@@ -1053,4 +1039,86 @@ fn to_seq(args: Seq) -> EvaluationResult {
             }
         })
         .ok_or(error_message("could not seq this value"))
+}
+
+// meta :: Value -> Metadata
+// gets metadata from value
+fn meta_of(args: Seq) -> EvaluationResult {
+    args.first()
+        .ok_or(error_message("wrong arity to meta"))
+        .and_then(|value| {
+            match **value {
+                LispType::Symbol(_, ref metadata) => {
+                    Ok(metadata.clone())
+                },
+                LispType::Lambda{ref metadata, ..} => {
+                    Ok(metadata.clone())
+                },
+                LispType::Macro{ref metadata, ..} => {
+                    Ok(metadata.clone())
+                },
+                LispType::Fn(_, ref metadata) => {
+                    Ok(metadata.clone())
+                }
+                LispType::List(_, ref metadata) => {
+                    Ok(metadata.clone())
+                }
+                LispType::Vector(_, ref metadata) => {
+                    Ok(metadata.clone())
+                }
+                LispType::Map(_, ref metadata) => {
+                    Ok(metadata.clone())
+                }
+                _ => Ok(new_nil()),
+            }
+        })
+}
+
+// with-meta :: Value -> Map -> Value
+// creates value with supplied metadata
+fn with_meta(args: Seq) -> EvaluationResult {
+    args.split_first()
+        .ok_or(error_message("wrong arity to with-meta"))
+        .and_then(|(value, rest)| {
+            rest.split_first()
+                .ok_or(error_message("wrong arity to with-meta"))
+                .and_then(|(meta, _)| {
+                    // uncomment if we only want maps as metadata
+                    // if let LispType::Map(ref meta, ..) = **meta {
+                        // let meta = new_metadata(meta.clone());
+                    match **value {
+                        LispType::Symbol(ref s, ..) => {
+                            Ok(new_symbol(s, Some(meta.clone())))
+                        },
+                        LispType::Lambda{
+                            ref params,
+                            ref body,
+                            ref env, ..} => {
+                            Ok(new_lambda(params.clone(), body.clone(), env.clone(), Some(meta.clone())))
+                        },
+                        LispType::Macro{
+                            ref params,
+                            ref body,
+                            ref env, ..} => {
+                            Ok(new_macro(params.clone(), body.clone(), env.clone(), Some(meta.clone())))
+                        },
+                        LispType::Fn(f, ..) => {
+                            Ok(new_fn(f, Some(meta.clone())))
+                        }
+                        LispType::List(ref seq, ..) => {
+                            Ok(new_list(seq.clone(), Some(meta.clone())))
+                        }
+                        LispType::Vector(ref seq, ..) => {
+                            Ok(new_vector(seq.clone(), Some(meta.clone())))
+                        }
+                        LispType::Map(ref assoc, ..) => {
+                            Ok(new_map(assoc.clone(), Some(meta.clone())))
+                        }
+                        _ => Err(error_message("type of this argument does not support metadata")),
+                    }
+                    // } else {
+                    //     Err(error_message("metadata must be of type map"))
+                    // }
+                })
+        })
 }
