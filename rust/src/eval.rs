@@ -93,8 +93,8 @@ fn eval_seq(operands: Seq, env: Env) -> Result<Seq, EvaluationError> {
 }
 
 fn apply(operator: LispValue, operands: Seq) -> EvaluationResult {
-        match *operator {
-            LispType::Lambda { ref params, ref body, ref env, .. } => {
+    match *operator {
+        LispType::Lambda { ref params, ref body, ref env, .. } => {
             apply_lambda(params.clone(), body.clone(), env.clone(), operands.to_vec())
         }
         LispType::Fn(f, ..) => f(operands.to_vec()),
