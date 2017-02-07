@@ -449,7 +449,6 @@ fn macroexpand(val: LispValue, env: Env) -> EvaluationResult {
                                 LispType::Macro { ref params, ref body, ref env, .. } => {
                                     apply_lambda(params.clone(), body.clone(), env.clone(), ops)
                                 }
-                                LispType::Fn(f, ..) => f(ops),
                                 _ => unreachable!(),
                             }
                         })
