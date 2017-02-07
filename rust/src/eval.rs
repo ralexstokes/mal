@@ -110,15 +110,13 @@ pub fn apply_lambda(params: Seq, body: Seq, env: Env, evops: Seq) -> EvaluationR
 }
 
 fn eval_sequence(seq: Seq, env: Env) -> EvaluationResult {
-    let result = seq.iter()
-        // TODO want to handle errors inside map here, not below
+    // TODO want to handle errors inside map here, not below
+    seq.iter()
         .map(|s| eval(s.clone(), env.clone()))
-        .last();
-    if let Some(result) = result {
-        result
-    } else {
-        Err(EvaluationError::Message("could not eval sequence".to_string()))
-    }
+        .last()
+        .unwrap_or_else(|| {
+            Err(EvaluationError::Message("could not eval sequence".to_string()))
+        })
 }
 
 fn eval_vector(seq: Seq, env: Env) -> EvaluationResult {
