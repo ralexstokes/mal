@@ -122,7 +122,7 @@ impl LineReader {
         let readline = self.editor.readline(&self.prompt);
         match readline {
             Ok(line) => {
-                self.editor.add_history_entry(&line);
+                self.editor.add_history_entry(line.as_ref());
                 Some(line)
             }
             Err(_) => None,

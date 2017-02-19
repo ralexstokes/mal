@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Alex Stokes <r.alex.stokes@gmail.com>"]
 
 [dependencies]
-rustyline = "1.0.0"
+rustyline = { git = "https://github.com/ralexstokes/rustyline" }
 regex = "0.1.80"
 lazy_static = "0.2.2"
 term = "0.2"
