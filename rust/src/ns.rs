@@ -324,6 +324,10 @@ fn read_string(args: Seq) -> EvaluationResult {
                                 ReaderError::Message(s) => {
                                     EvaluationError::Message(s)
                                 }
+                                ReaderError::ExtraInput(_, _) => {
+                                    // TODO forward error properly
+                                    EvaluationError::Message("extra input".into())
+                                }
                                 ReaderError::EmptyInput => {
                                     EvaluationError::Message("input was empty".into())
                                 }

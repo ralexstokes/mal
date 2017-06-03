@@ -8,7 +8,13 @@ pub type ReaderResult = ::std::result::Result<LispValue, ReaderError>;
 pub fn read(input: String) -> ReaderResult {
     let tokens = tokenizer(input);
     let mut reader = Reader::new(tokens);
-    read_form(&mut reader)
+    let result = read_form(&mut reader);
+    if reader.is_empty() {
+        result
+    } else {
+        let (tokens, pos) = reader.extra_input();
+        Err(ReaderError::ExtraInput(tokens, pos))
+    }
 }
 
 const TOKEN_REGEX: &'static str =
@@ -33,17 +39,17 @@ fn test_tokenizer() {
 }
 
 #[derive(Debug,Clone)]
-enum Token {
+pub enum Token {
     List(Direction),
     Vector(Direction),
     Map(Direction),
     Atom(String),
-    Comment,
+    Comment(String),
 }
 
 // Direction indicates if the wrapping token is opening or closing its extent.
 #[derive(Debug,Clone)]
-enum Direction {
+pub enum Direction {
     Open,
     Close,
 }
@@ -53,7 +59,7 @@ fn token_from(capture: Captures) -> Token {
     let c = capture.at(1).unwrap();
 
     if c.starts_with(';') {
-        return Token::Comment;
+        return Token::Comment(c.to_string());
     }
 
     match c {
@@ -86,6 +92,14 @@ impl Reader {
 
     fn peek(&self) -> Option<Token> {
         self.current_token.clone()
+    }
+
+    fn extra_input(&self) -> (Vec<Token>, usize) {
+        (self.tokens.clone(), self.position)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.position == self.tokens.len()
     }
 }
 
@@ -143,7 +157,7 @@ fn read_form(reader: &mut Reader) -> ReaderResult {
 
     while let Some(token) = reader.peek() {
         match token {
-            Token::Comment => {
+            Token::Comment(_) => {
                 let _ = reader.next();
             }
             Token::Atom(ref value) => {

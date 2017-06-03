@@ -66,6 +66,10 @@ impl Repl {
                 Err(Error::ReaderError(e)) => {
                     match e {
                         ReaderError::Message(s) => self.reader.write_err(s),
+                        ReaderError::ExtraInput(_,_) => {
+                            let msg = format!("{}", e);
+                            self.reader.write_err(msg)
+                        }
                         ReaderError::EmptyInput => {}
                     }
                 }

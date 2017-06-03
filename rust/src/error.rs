@@ -1,5 +1,6 @@
 use std::fmt;
 use std::convert::From;
+use reader::Token;
 use types::LispValue;
 
 #[derive(Debug)]
@@ -40,6 +41,7 @@ impl fmt::Display for EvaluationError {
 #[derive(Debug)]
 pub enum ReaderError {
     Message(String),
+    ExtraInput(Vec<Token>, usize),
     EmptyInput,
 }
 
@@ -47,6 +49,29 @@ impl fmt::Display for ReaderError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             ReaderError::Message(ref s) => write!(f, "{}", s),
+            ReaderError::ExtraInput(_, _) => {
+                write!(f, "extra input after full form")
+                // let _ = write!(f, "extra input after full form: (whitespace removed, sorry)\n");
+                // for token in tokens {
+                //     let _ = match token {
+                //         &Token::List(Direction::Open) => write!(f, "("),
+                //         &Token::List(Direction::Close) => write!(f, ")"),
+                //         &Token::Vector(Direction::Open) => write!(f, "["),
+                //         &Token::Vector(Direction::Close) => write!(f, "]"),
+                //         &Token::Map(Direction::Open) => write!(f, "{{"),
+                //         &Token::Map(Direction::Close) => write!(f, "}}"),
+                //         &Token::Atom(ref s) => write!(f, "{}", s),
+                //         &Token::Comment(ref s) => write!(f, "{}", s),
+                //     };
+                // }
+                // let _ = write!(f, "\n",);
+                // let mut pos = pos as isize;
+                // while pos >= 0 {
+                //     pos -= 1;
+                //     let _ = write!(f, " ");
+                // }
+                // write!(f, "^")
+            }
             ReaderError::EmptyInput => Ok(()),
         }
     }
