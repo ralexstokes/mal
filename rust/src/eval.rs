@@ -182,6 +182,9 @@ fn eval_let(seq: Seq, env: Env) -> EvaluationResult {
             match **bindings {
                 LispType::List(ref seq, ..) |
                 LispType::Vector(ref seq, ..) => {
+                    if seq.len() % 2 != 0 {
+                        return Err(EvaluationError::Message("let requires an even number of forms in binding vector".to_string()));
+                    }
                     let body = body.to_vec();
                     build_let_env(seq.to_vec(), env)
                         .ok_or(EvaluationError::Message("could not build let env".to_string()))
@@ -194,13 +197,10 @@ fn eval_let(seq: Seq, env: Env) -> EvaluationResult {
 
 const PAIR_CHUNK_SIZE: usize = 2;
 
+// bindings.len() % 2 == 0
 fn build_let_env(bindings: Seq, env: Env) -> Option<Env> {
     let env = empty_from(env);
     for pair in bindings.chunks(PAIR_CHUNK_SIZE) {
-        if pair.len() != PAIR_CHUNK_SIZE {
-            break;
-        }
-
         let key = match *pair[0].clone() {
             LispType::Symbol(ref s, ..) => s.clone(),
             _ => unreachable!(),
