@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn test_print_list() {
-        let ast = new_list(vec![new_symbol("+", None), new_number(2), new_number(3)]);
+        let ast = new_list(vec![new_symbol("+", None), new_number(2), new_number(3)], None);
         let output = print(&ast);
         if output.as_str() != "(+ 2 3)" {
             panic!("not equal")

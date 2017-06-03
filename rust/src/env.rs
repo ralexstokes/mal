@@ -90,42 +90,42 @@ pub fn root(env: &Env) -> Env {
 fn test_nesting() {
     use types::{LispType, new_symbol};
     let one = empty();
-    one.borrow_mut().set("a".to_string(), new_symbol("a"));
+    one.borrow_mut().set("a".to_string(), new_symbol("a", None));
     let two = empty_from(one.clone());
-    two.borrow_mut().set("b".to_string(), new_symbol("b"));
+    two.borrow_mut().set("b".to_string(), new_symbol("b", None));
 
     let onea = one.borrow().get(&"a".to_string());
     match onea {
-        Some(x) => {
+        Ok(x) => {
             match *x {
-                LispType::Symbol(ref s) => assert!(s.as_str() == "a"),
+                LispType::Symbol(ref s, _) => assert!(s.as_str() == "a"),
                 _ => panic!("wrong ast type"),
             }
         }
-        None => panic!("missing binding"),
+        Err(_) => panic!("missing binding"),
     }
 
     let oneb = one.borrow().get(&"b".to_string());
-    assert!(oneb.is_none());
+    assert!(oneb.is_err());
 
     let twob = two.borrow().get(&"b".to_string());
     match twob {
-        Some(x) => {
+        Ok(x) => {
             match *x {
-                LispType::Symbol(ref s) => assert!(s.as_str() == "b"),
+                LispType::Symbol(ref s, _) => assert!(s.as_str() == "b"),
                 _ => panic!("wrong ast type"),
             }
         }
-        None => panic!("missing binding"),
+        Err(_) => panic!("could not get binding"),
     }
     let twoa = two.borrow().get(&"a".to_string());
     match twoa {
-        Some(x) => {
+        Ok(x) => {
             match *x {
-                LispType::Symbol(ref s) => assert!(s.as_str() == "a"),
+                LispType::Symbol(ref s, _) => assert!(s.as_str() == "a"),
                 _ => panic!("wrong ast type"),
             }
         }
-        None => panic!("missing binding"),
+        Err(_) => panic!("could not get binding"),
     }
 }
